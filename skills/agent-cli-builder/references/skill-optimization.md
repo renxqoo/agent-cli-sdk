@@ -135,18 +135,16 @@ Use progressive disclosure:
 skill-name/
 ├── SKILL.md
 └── references/
-    ├── install.md
     └── domain-fields.md
 ```
 
-| Content                          | Location                                |
-| -------------------------------- | --------------------------------------- |
-| Capability, triggers, exclusions | Frontmatter `description`               |
-| Core workflow, safety, recovery  | `SKILL.md` body                         |
-| Command signatures               | AUTO-GEN                                |
-| Fields, enums, complex responses | `references/`                           |
-| Repeated installation copy       | One template generated into every Skill |
-| Scans and benchmarks             | Test or release artifacts               |
+| Content                          | Location                  |
+| -------------------------------- | ------------------------- |
+| Capability, triggers, exclusions | Frontmatter `description` |
+| Core workflow, safety, recovery  | `SKILL.md` body           |
+| Command signatures               | AUTO-GEN                  |
+| Fields, enums, complex responses | `references/`             |
+| Scans and benchmarks             | Test or release artifacts |
 
 Every Skill must be independently distributable. Do not link outside its directory or rely on symlinks.
 
@@ -178,14 +176,13 @@ description: <capability, triggers, nearest exclusion>
 
 ## Execution
 
-1. Check whether `example-cli` is available; if not, read `references/install.md`.
+1. Check whether `example-cli` is available.
 2. Use structured output explicitly.
 3. Apply only non-obvious parameter, sequencing, and recovery rules.
 4. Answer only from returned fields.
 
 ## References
 
-- Installation: `references/install.md`
 - Fields: `references/domain.md`
 ```
 
@@ -250,7 +247,8 @@ Do not optimize to a fixed line count. Required decision complexity determines l
 
 ### Layer 2: generation and code
 
-- Run generators, then their `--check` modes.
+- Run `skills gen` to generate or refresh the command table.
+- Run `skills gen` again and confirm the second run produces no diff (idempotent).
 - Run typecheck, build, unit, and end-to-end tests.
 - Cover normal, missing, boundary, empty, remote-failure, and partial-failure cases.
 
@@ -297,7 +295,7 @@ Test direct triggers, paraphrases, neighboring exclusions, missing dependencies,
 ### Convention
 
 - [ ] `SKILL.md` contains only core decisions; detailed fields are references.
-- [ ] Mechanical indexes and repeated installation files are generated.
+- [ ] Mechanical command indexes are generated, not handwritten.
 - [ ] Every Skill is self-contained.
 - [ ] Links, frontmatter, names, formatting, and package contents pass validation.
 

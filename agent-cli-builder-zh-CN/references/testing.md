@@ -18,7 +18,7 @@
 | CLI 端到端     | argv、路由、插件、输出、exit code | 成功 JSON、参数错误、HTTP 错误 |
 | JSON 参数      | 来源、Zod、脱敏、写策略、stdin    | 合法来源、限制、发现、策略     |
 | 构建与打包     | ESM 入口、bin、文件清单           | build、`--help`、pack dry-run  |
-| Skill 静态校验 | frontmatter、链接、AUTO-GEN       | 校验器、生成器 `--check`       |
+| Skill 静态校验 | frontmatter、链接、AUTO-GEN       | 校验器                         |
 | 前向评测       | 触发、调用、安全、最终结果        | 典型、口语、相邻边界、失败场景 |
 
 所有远程写操作使用 mock、sandbox 或专用测试资源。未经授权不得用生产凭证或生产数据做测试。

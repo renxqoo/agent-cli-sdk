@@ -10,6 +10,16 @@ The format follows the conventions described in `CONTRIBUTING.md`: every release
 
 Record public API changes, user-visible behavior, breaking changes, and migration instructions under that heading.
 
+## [@renxqoo/agent-cli-sdk@1.0.1] - 2026-08-16
+
+### Changed
+
+- **Skill authoring guidance (docs only)**: removed the shared `references/install.md` template-generation concept from `agent-cli-builder` skill references (Chinese and English). The recommended Skill structure no longer includes `install.md`, and the "generate repeated installation references from one template at build time" rule is gone.
+
+### Removed
+
+- Phantom `--check` generator flag mentions in `testing.md` and `skill-optimization.md` (both languages): `skills gen` only supports `--init`, `--force`, and `--lang`. Idempotency is now verified by running `skills gen` twice and confirming no diff.
+
 ## [@renxqoo/agent-cli-sdk@1.0.0] - 2026-08-15
 
 Initial public release.

@@ -75,7 +75,6 @@ description: 查询和管理待办。当用户要查看、新建或完成待办�
 
 ```markdown
 <!-- AUTO-GEN:START commands -->
-<!-- 本区块由 my-cli skills gen 自动生成，请勿手改 -->
 
 ## 命令
 
@@ -111,14 +110,12 @@ AUTO-GEN 包含操作说明和命令签名，不包含完整参数表。若 scop
 skills/my-skill/
 ├── SKILL.md
 └── references/
-    ├── install.md
     └── domain-fields.md
 ```
 
 - 在 `SKILL.md` 直接链接每个 reference，并写明何时读取。
 - 参数、字段、枚举和复杂工作流放 references；不要同时复制到正文。
 - 每个 Skill 必须包含运行所需的全部 references，不引用 Skill 目录外文件，不使用软链接。
-- 多个 Skill 共用安装说明时，从单一模板在 build 时生成实体 `references/install.md`；生成器需幂等并支持 `--check`。
 - `package.json.files` 至少包含 `dist` 和 `skills`；用 pack dry-run 验证实际产物。
 
 安装 reference 应要求 agent 先检查 bin 是否存在。缺失时说明全局安装、文件同步和网络访问等影响，取得必要授权后再执行，并用 `<bin> --help` 验证。

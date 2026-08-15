@@ -147,22 +147,20 @@ description: 热点工具。用户提到热搜、新闻、热门、趋势、舆�
 skill-name/
 ├── SKILL.md
 └── references/
-    ├── install.md
     └── domain-fields.md
 ```
 
 分配信息:
 
-| 内容                           | 放置位置                            |
-| ------------------------------ | ----------------------------------- |
-| 名称、能力、触发和排除边界     | frontmatter `description`           |
-| 核心工作流、安全边界、关键恢复 | `SKILL.md` 正文                     |
-| 命令签名、参数索引             | AUTO-GEN 区块                       |
-| 完整字段、枚举、复杂返回结构   | `references/`                       |
-| 安装步骤等跨 skill 相同内容    | 单一模板生成到各 skill 的 reference |
-| 真实测试、扫描报告、benchmark  | 测试或发布产物，不塞入 skill 正文   |
+| 内容                           | 放置位置                          |
+| ------------------------------ | --------------------------------- |
+| 名称、能力、触发和排除边界     | frontmatter `description`         |
+| 核心工作流、安全边界、关键恢复 | `SKILL.md` 正文                   |
+| 命令签名、参数索引             | AUTO-GEN 区块                     |
+| 完整字段、枚举、复杂返回结构   | `references/`                     |
+| 真实测试、扫描报告、benchmark  | 测试或发布产物，不塞入 skill 正文 |
 
-每个 skill 必须可以独立分发。不要引用 skill 目录外的共享文件，也不要依赖软链接。共享内容应在 build 时生成实体文件到每个 skill 内。
+每个 skill 必须可以独立分发。不要引用 skill 目录外的共享文件，也不要依赖软链接。
 
 ### 4.5 Effectiveness 有效性
 
@@ -202,14 +200,13 @@ metadata:
 
 ## 执行规则
 
-1. 检查 `example-cli` 是否可用；不可用时读取 `references/install.md`。
+1. 检查 `example-cli` 是否可用。
 2. 调用业务命令时显式使用结构化输出参数。
 3. 写清最重要的参数陷阱、多步依赖和失败恢复。
 4. 只依据返回字段回答，不编造缺失信息。
 
 ## References
 
-- 安装与验证:`references/install.md`
 - 参数和字段:`references/domain.md`
 
 <!-- AUTO-GEN:START commands -->
@@ -250,7 +247,6 @@ metadata:
 
 ## References
 
-- 安装与验证:`references/install.md`
 - 字段和合并规则:`references/fields.md`
 ```
 
@@ -295,8 +291,8 @@ metadata:
 
 ### 第 2 层:生成、构建和代码测试
 
-- 运行安装 reference 和命令表生成器。
-- 再运行生成器的 `--check` 模式。
+- 运行 `skills gen` 生成/刷新命令表。
+- 再次运行 `skills gen`，确认输出无变化（幂等）。
 - 运行 typecheck 和 build。
 - 运行单元测试和 CLI 端到端测试。
 - 覆盖正常输入、缺失输入、边界值、空结果、远程失败和部分失败。
@@ -365,7 +361,7 @@ metadata:
 ### Convention
 
 - [ ] `SKILL.md` 只保留核心决策，详细字段放入 references。
-- [ ] 机械命令表和共享安装文档由单一来源生成。
+- [ ] 机械命令表由生成器生成，未手写。
 - [ ] 每个 skill 独立包含所需文件，不依赖目录外资源。
 - [ ] 所有链接、frontmatter、命名、格式和打包内容通过校验。
 

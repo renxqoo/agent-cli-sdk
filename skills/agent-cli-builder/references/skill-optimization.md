@@ -240,7 +240,6 @@ Keep:
 
 Do not optimize to a fixed line count. Required decision complexity determines length.
 
-
 ## 7. Validation workflow
 
 ### Layer 1: structure

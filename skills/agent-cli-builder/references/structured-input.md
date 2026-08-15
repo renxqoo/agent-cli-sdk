@@ -21,7 +21,13 @@ const CreateOrder = z
   })
   .register(z.globalRegistry, {
     sensitive: ["/remark"],
-    examples: [{ customerId: "c1", items: [], address: { country: "CN", city: "Shanghai", line1: "Example Road 1" } }],
+    examples: [
+      {
+        customerId: "c1",
+        items: [],
+        address: { country: "CN", city: "Shanghai", line1: "Example Road 1" },
+      },
+    ],
   });
 
 export const create = defineCommand({

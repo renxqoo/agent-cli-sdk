@@ -106,21 +106,23 @@ async function readInputFile(path: string): Promise<Buffer> {
     // O_NOFOLLOW 在 Windows 上 constants.O_NOFOLLOW 为 undefined(?? 0 后失效),open 会跟随
     // symlink;先用 lstat(不跟随)显式拒绝非常规文件(含 symlink)。
     const pathStat = await lstat(path);
-    if (!pathStat.isFile()) throw new ValidationError({
-      subtype: "invalid_argument",
-      param: "--input-file",
-      message: "path is not a regular file",
-      hint: "Use a readable regular file; symlinks and device files are not accepted.",
-    });
+    if (!pathStat.isFile())
+      throw new ValidationError({
+        subtype: "invalid_argument",
+        param: "--input-file",
+        message: "path is not a regular file",
+        hint: "Use a readable regular file; symlinks and device files are not accepted.",
+      });
     handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
     // 对已打开的 fd 做 fstat:类型与大小以 fd 为准,消除 open 与 path 检查之间的路径竞态。
     const stat = await handle.stat();
-    if (!stat.isFile()) throw new ValidationError({
-      subtype: "invalid_argument",
-      param: "--input-file",
-      message: "path is not a regular file",
-      hint: "Use a readable regular file; symlinks and device files are not accepted.",
-    });
+    if (!stat.isFile())
+      throw new ValidationError({
+        subtype: "invalid_argument",
+        param: "--input-file",
+        message: "path is not a regular file",
+        hint: "Use a readable regular file; symlinks and device files are not accepted.",
+      });
     if (stat.size > DEFAULT_JSON_LIMITS.maxBytes) throw inputTooLarge("--input-file");
     return bounded(await handle.readFile(), "--input-file");
   } catch (cause) {

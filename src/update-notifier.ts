@@ -135,7 +135,7 @@ function resolveRegistryUrl(value?: string): string {
     return registry.toString();
   } catch (error) {
     if (error instanceof TypeError && error.message.startsWith("registryUrl")) throw error;
-    throw new TypeError(`registryUrl must be an absolute URL: ${value}`);
+    throw new TypeError(`registryUrl must be an absolute URL: ${value}`, { cause: error });
   }
 }
 

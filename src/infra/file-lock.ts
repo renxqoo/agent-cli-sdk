@@ -16,7 +16,6 @@ import {
   mkdirSync,
 } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { ConflictError } from "../errs/index.js";
 
 export interface WithFileLockOptions {
@@ -180,10 +179,14 @@ export function withFileLockSync<T>(
         /* another process reclaimed it */
       }
       if (!acquire()) {
-        throw new ConflictError(`Could not acquire lock "${key}" in ${dir} (held by another process)`);
+        throw new ConflictError(
+          `Could not acquire lock "${key}" in ${dir} (held by another process)`,
+        );
       }
     } else {
-      throw new ConflictError(`Could not acquire lock "${key}" in ${dir} (held by another process)`);
+      throw new ConflictError(
+        `Could not acquire lock "${key}" in ${dir} (held by another process)`,
+      );
     }
   }
 

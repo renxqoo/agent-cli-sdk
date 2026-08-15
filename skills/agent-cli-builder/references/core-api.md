@@ -134,18 +134,18 @@ Global installation makes `argv[1]` a symlink, so compare real paths. Never run 
 
 Key `defineCliApp` options:
 
-| Option          | Rule                                            |
-| --------------- | ----------------------------------------------- |
+| Option          | Rule                                                                                    |
+| --------------- | --------------------------------------------------------------------------------------- |
 | `dir`           | The app's one local-state root (`dir` XOR `localState`; injected via `apply(services)`) |
-| `name`          | Output `source`, pipe type, and Skill identity  |
-| `binName`       | The actual shell command; set it explicitly     |
-| `commands`      | Required top-level commands; use for one domain |
-| `namespaces`    | Use only for multiple unrelated domains         |
-| `plugins`       | Plain Plugin objects (`defineAuth` and friends are sync factories), never Promises |
-| `errorOnStatus` | HTTP status to registered subtype mapping       |
-| `defaultFormat` | `auto` by default, or `json` / `human`          |
-| `skillsDir`     | Enables built-in `skills` commands              |
-| `skillsTargets` | Overrides default synchronization targets       |
+| `name`          | Output `source`, pipe type, and Skill identity                                          |
+| `binName`       | The actual shell command; set it explicitly                                             |
+| `commands`      | Required top-level commands; use for one domain                                         |
+| `namespaces`    | Use only for multiple unrelated domains                                                 |
+| `plugins`       | Plain Plugin objects (`defineAuth` and friends are sync factories), never Promises      |
+| `errorOnStatus` | HTTP status to registered subtype mapping                                               |
+| `defaultFormat` | `auto` by default, or `json` / `human`                                                  |
+| `skillsDir`     | Enables built-in `skills` commands                                                      |
+| `skillsTargets` | Overrides default synchronization targets                                               |
 
 The install wizard is a plugin-provided command, not an entry-point intercept. Add `defineInstaller({ skillsSource })` to the app's plugins and `rxcli install [--lang zh|en]` routes through the normal pipeline; the entry point stays a plain `app.run(argv)`.
 
@@ -190,7 +190,7 @@ const updateNotifier = createUpdateNotifier({
   updateCommand: "npm install -g @scope/my-cli",
 });
 
-const app = await defineCliApp({ /* dir, plugins: [updateNotifier], ... */ });
+const app = await defineCliApp({/* dir, plugins: [updateNotifier], ... */});
 ```
 
 `defineCliApp({ dir })` is the app's one directory decision. The assembler creates a single local state and injects it into every plugin through `apply(services)`. Layout: `<dir>/config/<ns>.json` (per-namespace app config), `<dir>/credentials/<ns>.json`, and `<dir>/cache/updates/`; the high-level APIs have no independent directory parameters.

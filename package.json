@@ -25,7 +25,9 @@
   },
   "files": [
     "dist",
+    "docs",
     "README.md",
+    "README.zh-CN.md",
     "skills"
   ],
   "type": "module",
@@ -53,11 +55,16 @@
     "build": "tsup",
     "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.type-tests.json",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
     "test:package": "node scripts/package-smoke.mjs",
     "docs:check": "node scripts/check-doc-links.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "husky"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
@@ -69,6 +76,9 @@
     "@types/node": "^26.2.0",
     "@types/qrcode": "^1.5.6",
     "@vitest/coverage-v8": "4.1.10",
+    "husky": "^9.1.7",
+    "oxfmt": "^0.63.0",
+    "oxlint": "^1.78.0",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
     "vitest": "^4.1.10"

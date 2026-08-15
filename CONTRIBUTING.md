@@ -11,17 +11,20 @@ Thanks for helping improve rxcli and `@renxqoo/agent-cli-sdk`.
 
 ## Local development
 
-Requirements: Node.js 20 or 22 and pnpm 9.
+Requirements: Node.js 20 or 22 and pnpm 11.
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm build
 pnpm typecheck
 pnpm test
-pnpm lint
+pnpm lint          # oxlint (.oxlintrc.json)
+pnpm format:check  # oxfmt (.oxfmtrc.json); pnpm format rewrites files
 pnpm docs:check
 pnpm --filter @renxqoo/agent-cli-sdk test:package
 ```
+
+Linting uses [oxlint](https://oxc.rs/docs/guide/usage/linter) and formatting uses [oxfmt](https://oxc.rs/docs/guide/usage/formatter). Git hooks are managed by [husky](https://github.com/typicode/husky): `pre-commit` runs lint and format checks, `pre-push` runs typecheck and tests. Hooks install automatically on `pnpm install`; to skip them for a throwaway commit use `git commit --no-verify`.
 
 Tests should describe observable behavior. For a defect, first add a failing regression test, then implement the smallest coherent fix. Public types require positive and negative fixtures under `type-tests`; npm-facing changes require the package smoke test.
 
@@ -34,7 +37,7 @@ Every pull request should explain:
 - tests actually executed;
 - documentation, Skill, or application migrations included.
 
-Keep generated output and unrelated formatting out of the diff. The CI matrix covers Ubuntu, macOS, and Windows on supported Node.js versions.
+Keep generated output and unrelated formatting out of the diff. The `main` branch is protected: every change merges through a pull request that passes CI. The CI matrix covers Ubuntu, macOS, and Windows on supported Node.js versions.
 
 ## Versions and changelog
 

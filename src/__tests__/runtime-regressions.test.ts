@@ -6,7 +6,6 @@ import {
   defineAuth,
   defineCli,
   defineCommand,
-  memoryStore,
   createMemoryLocalState,
   type CredentialProvider,
 } from "../index.js";

@@ -48,26 +48,26 @@ const app = await defineCliApp({
 
 Important options:
 
-| Option                      | Meaning                                                              |
-| --------------------------- | -------------------------------------------------------------------- |
+| Option                      | Meaning                                                                    |
+| --------------------------- | -------------------------------------------------------------------------- |
 | `credentialNamespace`       | Required namespace for both `config/<ns>.json` and `credentials/<ns>.json` |
-| `baseUrl`                   | Required auth service base URL                                       |
-| `scope`                     | One verified minimum scope for both login and registration metadata  |
-| `flow`                      | `device` (default) / `authorization_code` / `client_credentials`     |
-| `clientMetadata`            | RFC 7591 registration metadata; missing fields are derived (see below) |
-| `bearerToken`               | Pre-issued token injection for controlled CI or sandbox use          |
-| `providers`                 | Custom credential provider chain                                     |
-| `clientId` / `clientSecret` | Explicit client credentials                                          |
-| `redirectPort`              | Local callback port for authorization-code flow                      |
-| `commandNamespace`          | Defaults to `auth`                                                   |
+| `baseUrl`                   | Required auth service base URL                                             |
+| `scope`                     | One verified minimum scope for both login and registration metadata        |
+| `flow`                      | `device` (default) / `authorization_code` / `client_credentials`           |
+| `clientMetadata`            | RFC 7591 registration metadata; missing fields are derived (see below)     |
+| `bearerToken`               | Pre-issued token injection for controlled CI or sandbox use                |
+| `providers`                 | Custom credential provider chain                                           |
+| `clientId` / `clientSecret` | Explicit client credentials                                                |
+| `redirectPort`              | Local callback port for authorization-code flow                            |
+| `commandNamespace`          | Defaults to `auth`                                                         |
 
 **OAuth 2.1 flows** — pick the one the service needs:
 
-| `flow`                 | Grant                            | User | Notes                                             |
-| ---------------------- | -------------------------------- | ---- | ------------------------------------------------- |
-| `device` (default)     | RFC 8628 device authorization    | yes  | CLI default; supports `--no-wait` / `--device-code` split-flow |
-| `authorization_code`   | Authorization code + PKCE (S256) | yes  | The only flow that opens a browser; local loopback callback |
-| `client_credentials`   | Client credentials               | no   | Server-to-server; refresh re-issues the persisted granted scopes |
+| `flow`               | Grant                            | User | Notes                                                            |
+| -------------------- | -------------------------------- | ---- | ---------------------------------------------------------------- |
+| `device` (default)   | RFC 8628 device authorization    | yes  | CLI default; supports `--no-wait` / `--device-code` split-flow   |
+| `authorization_code` | Authorization code + PKCE (S256) | yes  | The only flow that opens a browser; local loopback callback      |
+| `client_credentials` | Client credentials               | no   | Server-to-server; refresh re-issues the persisted granted scopes |
 
 **Registration metadata derivation** — `clientMetadata` fields default per-field and explicit values win (`hasOwnProperty`):
 
@@ -172,13 +172,13 @@ Use `createMemoryLocalState` with `defineCliApp({ localState })` in tests to avo
 
 ## 5. When to use a custom plugin
 
-| Requirement                                                           | Choice                                                    |
-| --------------------------------------------------------------------- | --------------------------------------------------------- |
-| Standard OAuth device, authorization-code, or client-credentials flow | `defineAuth`                                              |
-| Single Bearer credential (non-OAuth)                               | Custom plugin with `injectAuthHeader(req, token, "bearer")` |
-| API key or Basic credential                                        | Custom plugin with `injectAuthHeader` (x-api-key / basic)    |
-| HMAC signing                                                          | Custom auth/provider plus post-signing plugin             |
-| mTLS                                                                  | Custom plugin and transport-specific certificate handling |
-| Multiple signatures or composite headers                              | Custom plugins with explicit hook ordering                |
+| Requirement                                                           | Choice                                                      |
+| --------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Standard OAuth device, authorization-code, or client-credentials flow | `defineAuth`                                                |
+| Single Bearer credential (non-OAuth)                                  | Custom plugin with `injectAuthHeader(req, token, "bearer")` |
+| API key or Basic credential                                           | Custom plugin with `injectAuthHeader` (x-api-key / basic)   |
+| HMAC signing                                                          | Custom auth/provider plus post-signing plugin               |
+| mTLS                                                                  | Custom plugin and transport-specific certificate handling   |
+| Multiple signatures or composite headers                              | Custom plugins with explicit hook ordering                  |
 
 For the last three cases, read `custom-auth-plugin.md` and pin the framework version used by the implementation.

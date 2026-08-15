@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { identityKey } from "../../context.js";
-import { memoryStore } from "../../credentials/config-store.js";
+
 import type { ConfigStore, CredentialProvider } from "../../credentials/types.js";
 import { createTestCtx } from "../../test-utils.js";
 import { defineAuth } from "../index.js";

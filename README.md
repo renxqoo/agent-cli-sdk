@@ -2,7 +2,7 @@
 
 [English](README.md) · [中文](README.zh-CN.md) · [Website](https://renxqoo.github.io/agent-cli-sdk)
 
-> **A skill factory for agent-facing CLIs.** Install one skill, let your AI agent turn any company API into a CLI *and* an agent skill — auth, unified output, typed errors and progressive disclosure included. The author writes only "which endpoint to call, how to map fields".
+> **A skill factory for agent-facing CLIs.** Install one skill, let your AI agent turn any company API into a CLI _and_ an agent skill — auth, unified output, typed errors and progressive disclosure included. The author writes only "which endpoint to call, how to map fields".
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
@@ -12,7 +12,7 @@
 
 ## What it is
 
-`agent-cli-sdk` lets you expose a company API to humans *and* AI agents from a single declaration. It is an SDK (you build a CLI with it), and it is a **skill factory**: the package ships an [`agent-cli-builder`](skills/agent-cli-builder/SKILL.md) skill, so an AI agent can generate the whole CLI for you from an API description.
+`agent-cli-sdk` lets you expose a company API to humans _and_ AI agents from a single declaration. It is an SDK (you build a CLI with it), and it is a **skill factory**: the package ships an [`agent-cli-builder`](skills/agent-cli-builder/SKILL.md) skill, so an AI agent can generate the whole CLI for you from an API description.
 
 One `defineCommand` produces three synchronized artifacts:
 
@@ -174,11 +174,11 @@ defineCommand({
       id: z.string().min(1).describe("Order ID"),
       verbose: z.boolean().describe("Verbose output").default(false),
     }),
-    pos: ["id"],   // `id` is a positional operand, not a same-name flag
+    pos: ["id"], // `id` is a positional operand, not a same-name flag
   },
   humanFormat: (data) => `Order: ${data.id}`, // optional: custom --no-json text
   async run(ctx, args) {
-    const res = await ctx.get(`/orders/${args.id}`);  // ctx.get/post/put/patch/delete
+    const res = await ctx.get(`/orders/${args.id}`); // ctx.get/post/put/patch/delete
     return { data: res.data };
   },
 });
@@ -190,8 +190,8 @@ defineCommand({
 
 ```ts
 const auth = defineAuth({
-  credentialNamespace: "crm",          // → config/crm.json + credentials/crm.json
-  baseUrl: AUTH_BASE_URL,              // OAuth middleware
+  credentialNamespace: "crm", // → config/crm.json + credentials/crm.json
+  baseUrl: AUTH_BASE_URL, // OAuth middleware
   scope: "company.api offline_access", // one scope for login + registration
   // flow: 'device',                   // default 'device' | 'authorization_code' | 'client_credentials'
   // commandNamespace: 'auth',         // default 'auth' → crm auth login
@@ -207,18 +207,22 @@ const myPlugin = {
   name: "audit",
   enforce: "pre", // 'pre' | 'post' (default normal)
   provides: {
-    commands: { telemetry: telemetryCmd },          // contribute commands
+    commands: { telemetry: telemetryCmd }, // contribute commands
     namespaces: { admin: { users: userCmd } },
   },
   async beforeRequest(ctx, req) {
     return { ...req, headers: { ...req.headers, "x-client": "my-cli" } };
   },
-  async transformOutput(ctx, data) { return data; },
-  async handleUnauthorized(ctx, event) { return { action: "decline" }; },
+  async transformOutput(ctx, data) {
+    return data;
+  },
+  async handleUnauthorized(ctx, event) {
+    return { action: "decline" };
+  },
 };
 ```
 
-Commands contributed via a plugin's `provides` are automatically exempted from *that plugin's own* `beforeCommand`, but not from other plugins. See [`docs/02-sdk-guide.md`](docs/02-sdk-guide.md).
+Commands contributed via a plugin's `provides` are automatically exempted from _that plugin's own_ `beforeCommand`, but not from other plugins. See [`docs/02-sdk-guide.md`](docs/02-sdk-guide.md).
 
 ---
 
@@ -246,16 +250,16 @@ Commands contributed via a plugin's `provides` are automatically exempted from *
 
 **Exit codes** (set automatically by error category; agents branch on them):
 
-| code | category | meaning |
-| --- | --- | --- |
-| 0 | — | success |
-| 1 | api | server-side business error (404/500/429…) |
-| 2 | validation | invalid parameter |
-| 3 | authentication / authorization / config | login required / missing permission / missing config |
-| 4 | network | DNS / timeout / connection refused |
-| 5 | internal | SDK internal error (should rarely happen) |
-| 6 | policy | risk-control block |
-| 10 | confirmation | high-risk write requires `--yes` |
+| code | category                                | meaning                                              |
+| ---- | --------------------------------------- | ---------------------------------------------------- |
+| 0    | —                                       | success                                              |
+| 1    | api                                     | server-side business error (404/500/429…)            |
+| 2    | validation                              | invalid parameter                                    |
+| 3    | authentication / authorization / config | login required / missing permission / missing config |
+| 4    | network                                 | DNS / timeout / connection refused                   |
+| 5    | internal                                | SDK internal error (should rarely happen)            |
+| 6    | policy                                  | risk-control block                                   |
+| 10   | confirmation                            | high-risk write requires `--yes`                     |
 
 Nine typed error classes — `ValidationError` / `AuthenticationError` / `PermissionError` / `ConfigError` / `NetworkError` / `APIError` (with `NotFoundError`) / `PolicyError` / `InternalError` / `ConfirmationRequiredError`. Always throw `errs.*`; a bare `Error` is downgraded to `internal/unknown`.
 
@@ -278,15 +282,15 @@ Agents load skills **lazily**: they start with only `name + description`, expand
 
 Design docs ship in [`docs/`](docs) — English as `*.en.md`, Chinese as `*.md`:
 
-| Doc | Content |
-| --- | --- |
-| [`00-overview.en.md`](docs/00-overview.en.md) | Architecture, layering, decision checklist |
-| [`01-cli-usage.en.md`](docs/01-cli-usage.en.md) | Command invocation, pipes, pagination, exit codes |
-| [`02-sdk-guide.en.md`](docs/02-sdk-guide.en.md) | SDK usage, ctx interface, hooks |
-| [`03-envelopes.en.md`](docs/03-envelopes.en.md) | Unified output field contract |
-| [`04-errors.en.md`](docs/04-errors.en.md) | 9 error classes, when to throw |
-| [`05-credentials.en.md`](docs/05-credentials.en.md) | Provider chain, custom credentials |
-| [`06-skills.en.md`](docs/06-skills.en.md) | Skill system, command doc auto-generation |
+| Doc                                                     | Content                                                                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [`00-overview.en.md`](docs/00-overview.en.md)           | Architecture, layering, decision checklist                                                                |
+| [`01-cli-usage.en.md`](docs/01-cli-usage.en.md)         | Command invocation, pipes, pagination, exit codes                                                         |
+| [`02-sdk-guide.en.md`](docs/02-sdk-guide.en.md)         | SDK usage, ctx interface, hooks                                                                           |
+| [`03-envelopes.en.md`](docs/03-envelopes.en.md)         | Unified output field contract                                                                             |
+| [`04-errors.en.md`](docs/04-errors.en.md)               | 9 error classes, when to throw                                                                            |
+| [`05-credentials.en.md`](docs/05-credentials.en.md)     | Provider chain, custom credentials                                                                        |
+| [`06-skills.en.md`](docs/06-skills.en.md)               | Skill system, command doc auto-generation                                                                 |
 | [`07-structured-input.md`](docs/07-structured-input.md) | Structured payloads, validation, write policies (English; see `07-structured-input.zh-CN.md` for Chinese) |
 
 The npm package ships the [`agent-cli-builder`](skills/agent-cli-builder/SKILL.md) skill — the agent-facing guide to building a CLI with this SDK — plus 11 references (core API, auth patterns, error catalog, plugin patterns, skill generation, testing, …).

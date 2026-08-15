@@ -15,7 +15,6 @@ import { buildOn401Handler } from "../auth/helpers.js";
 import { defineAuth } from "../auth/index.js";
 import { createTestCtx } from "../test-utils.js";
 import { memoryStore } from "../credentials/config-store.js";
-import { createMemoryLocalState } from "../local-state.js";
 import { AuthenticationError, NetworkError } from "../errs/index.js";
 
 afterEach(() => vi.restoreAllMocks());

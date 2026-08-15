@@ -13,9 +13,9 @@ Use plugins for cross-cutting behavior such as authentication, fixed headers, si
 
 | Hook                 | Runs                                 | Typical use                                          |
 | -------------------- | ------------------------------------ | ---------------------------------------------------- |
-| `apply`              | Once at assembly, before routing    | Resolve `services.localState.store`, fill `provides` |
-| `onAppRun`           | Once per `app.run`, before routing  | Best-effort startup awareness                        |
-| `afterAppRun`        | Once per `app.run`, after it settles| Best-effort operational notices (update awareness)   |
+| `apply`              | Once at assembly, before routing     | Resolve `services.localState.store`, fill `provides` |
+| `onAppRun`           | Once per `app.run`, before routing   | Best-effort startup awareness                        |
+| `afterAppRun`        | Once per `app.run`, after it settles | Best-effort operational notices (update awareness)   |
 | `beforeCommand`      | Before command `run`                 | Resolve identity, initialize state, reject execution |
 | `observeInput`       | After JSON args validation/redaction | Audit JSON provenance without raw data               |
 | `beforeRequest`      | Before each `ctx.*` attempt          | Headers, tenant, signatures                          |

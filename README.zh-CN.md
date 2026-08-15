@@ -2,7 +2,7 @@
 
 [English](README.md) · [中文](README.zh-CN.md) · [Website](https://renxqoo.github.io/agent-cli-sdk)
 
-> **一个面向 agent 的 CLI「skill 工厂」。** 装一个 skill,让 AI agent 把你的任何公司 API 变成一个 CLI *和* 一个 agent skill —— 鉴权、统一输出、类型化错误、渐进披露全包。作者只写「调哪个接口、字段怎么映射」。
+> **一个面向 agent 的 CLI「skill 工厂」。** 装一个 skill,让 AI agent 把你的任何公司 API 变成一个 CLI _和_ 一个 agent skill —— 鉴权、统一输出、类型化错误、渐进披露全包。作者只写「调哪个接口、字段怎么映射」。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
@@ -174,11 +174,11 @@ defineCommand({
       id: z.string().min(1).describe("订单 ID"),
       verbose: z.boolean().describe("是否详细输出").default(false),
     }),
-    pos: ["id"],   // `id` 是位置参数,不是同名 flag
+    pos: ["id"], // `id` 是位置参数,不是同名 flag
   },
   humanFormat: (data) => `订单: ${data.id}`, // 可选:--no-json 的自定义文本
   async run(ctx, args) {
-    const res = await ctx.get(`/orders/${args.id}`);  // ctx.get/post/put/patch/delete
+    const res = await ctx.get(`/orders/${args.id}`); // ctx.get/post/put/patch/delete
     return { data: res.data };
   },
 });
@@ -190,8 +190,8 @@ defineCommand({
 
 ```ts
 const auth = defineAuth({
-  credentialNamespace: "crm",          // → config/crm.json + credentials/crm.json
-  baseUrl: AUTH_BASE_URL,              // OAuth 中间层
+  credentialNamespace: "crm", // → config/crm.json + credentials/crm.json
+  baseUrl: AUTH_BASE_URL, // OAuth 中间层
   scope: "company.api offline_access", // 登录与注册共用一个 scope
   // flow: 'device',                   // 默认 'device' | 'authorization_code' | 'client_credentials'
   // commandNamespace: 'auth',         // 默认 'auth' → crm auth login
@@ -207,14 +207,18 @@ const myPlugin = {
   name: "audit",
   enforce: "pre", // 'pre' | 'post'(默认 normal)
   provides: {
-    commands: { telemetry: telemetryCmd },          // 贡献命令
+    commands: { telemetry: telemetryCmd }, // 贡献命令
     namespaces: { admin: { users: userCmd } },
   },
   async beforeRequest(ctx, req) {
     return { ...req, headers: { ...req.headers, "x-client": "my-cli" } };
   },
-  async transformOutput(ctx, data) { return data; },
-  async handleUnauthorized(ctx, event) { return { action: "decline" }; },
+  async transformOutput(ctx, data) {
+    return data;
+  },
+  async handleUnauthorized(ctx, event) {
+    return { action: "decline" };
+  },
 };
 ```
 
@@ -246,16 +250,16 @@ const myPlugin = {
 
 **退出码**(按错误类别自动设置,agent 据此分支):
 
-| 码 | 类别 | 含义 |
-| --- | --- | --- |
-| 0 | — | 成功 |
-| 1 | api | 服务端业务错误(404/500/429…) |
-| 2 | validation | 参数不合法 |
-| 3 | authentication / authorization / config | 需登录 / 缺权限 / 缺配置 |
-| 4 | network | DNS / 超时 / 连接被拒 |
-| 5 | internal | SDK 内部错误(极少发生) |
-| 6 | policy | 风控拦截 |
-| 10 | confirmation | 高风险写入需 `--yes` |
+| 码  | 类别                                    | 含义                         |
+| --- | --------------------------------------- | ---------------------------- |
+| 0   | —                                       | 成功                         |
+| 1   | api                                     | 服务端业务错误(404/500/429…) |
+| 2   | validation                              | 参数不合法                   |
+| 3   | authentication / authorization / config | 需登录 / 缺权限 / 缺配置     |
+| 4   | network                                 | DNS / 超时 / 连接被拒        |
+| 5   | internal                                | SDK 内部错误(极少发生)       |
+| 6   | policy                                  | 风控拦截                     |
+| 10  | confirmation                            | 高风险写入需 `--yes`         |
 
 九类类型化错误 —— `ValidationError` / `AuthenticationError` / `PermissionError` / `ConfigError` / `NetworkError` / `APIError`(含 `NotFoundError`)/ `PolicyError` / `InternalError` / `ConfirmationRequiredError`。永远 `throw errs.*`;裸 `Error` 会被降级成 `internal/unknown`。
 
@@ -278,16 +282,16 @@ agent **懒加载** skill:启动时只看到 `name + description`,任务匹配�
 
 设计文档随包发布在 [`docs/`](docs):
 
-| 文档 | 内容 |
-| --- | --- |
-| [`00-overview.md`](docs/00-overview.md) | 架构、分层、决策清单 |
-| [`01-cli-usage.md`](docs/01-cli-usage.md) | 命令调用、管道、分页、退出码 |
-| [`02-sdk-guide.md`](docs/02-sdk-guide.md) | SDK 用法、ctx 接口、钩子 |
-| [`03-envelopes.md`](docs/03-envelopes.md) | 统一输出字段契约 |
-| [`04-errors.md`](docs/04-errors.md) | 9 类错误、何时 throw |
-| [`05-credentials.md`](docs/05-credentials.md) | 凭证链、自定义凭证 |
-| [`06-skills.md`](docs/06-skills.md) | skill 系统、命令文档自动生成 |
-| [`07-structured-input.md`](docs/07-structured-input.md) | 结构化输入、校验、写入策略 |
+| 文档                                                    | 内容                         |
+| ------------------------------------------------------- | ---------------------------- |
+| [`00-overview.md`](docs/00-overview.md)                 | 架构、分层、决策清单         |
+| [`01-cli-usage.md`](docs/01-cli-usage.md)               | 命令调用、管道、分页、退出码 |
+| [`02-sdk-guide.md`](docs/02-sdk-guide.md)               | SDK 用法、ctx 接口、钩子     |
+| [`03-envelopes.md`](docs/03-envelopes.md)               | 统一输出字段契约             |
+| [`04-errors.md`](docs/04-errors.md)                     | 9 类错误、何时 throw         |
+| [`05-credentials.md`](docs/05-credentials.md)           | 凭证链、自定义凭证           |
+| [`06-skills.md`](docs/06-skills.md)                     | skill 系统、命令文档自动生成 |
+| [`07-structured-input.md`](docs/07-structured-input.md) | 结构化输入、校验、写入策略   |
 
 npm 包自带 [`agent-cli-builder`](skills/agent-cli-builder/SKILL.md) skill —— 教 agent 用本 SDK 构建 CLI —— 以及 11 份 references(core API、auth patterns、error catalog、plugin patterns、skill generation、testing 等)。
 

@@ -17,7 +17,6 @@ import {
   existsSync,
   readFileSync,
   lstatSync,
-  readdirSync,
   openSync,
   writeSync,
   closeSync,

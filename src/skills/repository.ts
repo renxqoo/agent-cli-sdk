@@ -105,12 +105,7 @@ export class SkillRepository {
 
     this.#files.write(
       path,
-      refreshAutogen(
-        this.#files.read(path),
-        this.#options.binName,
-        this.#options.cli,
-        language,
-      ),
+      refreshAutogen(this.#files.read(path), this.#options.binName, this.#options.cli, language),
     );
     return { path, mode: "refresh" };
   }

@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [
+    "dist/",
+    "coverage/",
+    "node_modules/",
+    "website/",
+    "docs/",
+    "agent-cli-builder-zh-CN/"
+  ]
+}

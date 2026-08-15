@@ -14,14 +14,14 @@ A README serves developers and terminal users; a Skill serves AI agents. They sh
 
 Extract facts from implementation rather than filling a template from memory:
 
-| README content                 | Source of truth                              |
-| ------------------------------ | -------------------------------------------- |
-| Package, bin, Node.js version  | `package.json`                               |
-| Positioning, commands, domains | `defineCli`, `defineCommand`                 |
+| README content                 | Source of truth                                    |
+| ------------------------------ | -------------------------------------------------- |
+| Package, bin, Node.js version  | `package.json`                                     |
+| Positioning, commands, domains | `defineCli`, `defineCommand`                       |
 | Installation effects           | `defineInstaller` plugin options in `defineCliApp` |
-| Authentication                 | Auth implementation and real `--help`        |
-| Output and pagination          | Command returns and `defaultFormat`          |
-| Development commands           | `package.json.scripts`                       |
+| Authentication                 | Auth implementation and real `--help`              |
+| Output and pagination          | Command returns and `defaultFormat`                |
+| Development commands           | `package.json.scripts`                             |
 
 Keep only sections that add value:
 

@@ -5,7 +5,7 @@
  *   B5  — withLock serializes read-modify-write across store instances
  *   C11 — reads tolerate a missing dir and validate namespace before any side effect
  */
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

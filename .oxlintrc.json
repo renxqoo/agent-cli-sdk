@@ -1,0 +1,47 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "browser": false,
+    "node": true,
+    "es2025": true
+  },
+  "ignorePatterns": [
+    "dist/",
+    "coverage/",
+    "node_modules/",
+    "website/",
+    "docs/",
+    "agent-cli-builder-zh-CN/"
+  ],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "no-unused-vars": "warn",
+    "no-underscore-dangle": "off",
+    "typescript/no-explicit-any": "off",
+    "typescript/no-var-requires": "off",
+    "import/no-default-export": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/__tests__/**", "**/*.test.ts", "type-tests/**"],
+      "rules": {
+        "typescript/no-non-null-assertion": "off",
+        "vitest/require-mock-type-parameters": "off",
+        "vitest/no-conditional-expect": "off",
+        "vitest/require-to-throw-message": "off",
+        "vitest/expect-expect": "off",
+        "vitest/valid-expect": "off"
+      }
+    },
+    {
+      "files": ["vitest.config.ts", "tsup.config.ts", "scripts/**"],
+      "rules": {
+        "import/no-anonymous-default-export": "off"
+      }
+    }
+  ]
+}

@@ -7,7 +7,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageDir = join(dirname(fileURLToPath(import.meta.url)), "..");
-const repositoryRoot = join(packageDir, "..", "..");
+const repositoryRoot = packageDir;
 const temporaryDir = mkdtempSync(join(tmpdir(), "agent-cli-sdk-package-"));
 const subprocessEnv = { ...process.env, npm_config_cache: join(temporaryDir, "npm-cache") };
 

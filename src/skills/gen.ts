@@ -64,7 +64,8 @@ const GEN_STRINGS: Record<
     commandsHeader: "| 操作 | 命令 |",
     argTableHeader: "| 参数 | 类型 | 必填 | 默认 | 说明 |",
     autogenComment: "<!-- 本区块由 `rxcli skills gen` 自动生成,不要手改 -->",
-    skeletonFillIntro: "{{FILL: 一句话说明这个 skill 做什么、怎么运行 —— 具体命令见下方自动生成的命令表}}",
+    skeletonFillIntro:
+      "{{FILL: 一句话说明这个 skill 做什么、怎么运行 —— 具体命令见下方自动生成的命令表}}",
     skeletonFillDesc: "{{FILL: 一句话描述何时用 —— agent 靠它语义匹配用户意图}}",
     errorHeading: "## 错误处理",
     errorHeader: "| 错误 | 处理 |",

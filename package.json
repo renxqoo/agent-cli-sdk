@@ -1,0 +1,79 @@
+{
+  "name": "@renxqoo/agent-cli-sdk",
+  "version": "1.0.0",
+  "description": "Agent-native CLI framework — a command-line framework that lets AI agents consume business data in a structured way (auth, unified output, errors, credentials, pipes, skills)",
+  "keywords": [
+    "agent",
+    "agent-native",
+    "ai",
+    "cli",
+    "data",
+    "envelope",
+    "framework",
+    "oauth",
+    "sdk"
+  ],
+  "homepage": "https://github.com/renxqoo/agent-cli-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/renxqoo/agent-cli-sdk/issues"
+  },
+  "license": "MIT",
+  "author": "renxqoo <wangrenren611@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/renxqoo/agent-cli-sdk.git"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "skills"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./errs": {
+      "types": "./dist/errs/index.d.ts",
+      "import": "./dist/errs/index.js"
+    },
+    "./credentials": {
+      "types": "./dist/credentials/index.d.ts",
+      "import": "./dist/credentials/index.js"
+    },
+    "./skills": {
+      "types": "./dist/skills/index.d.ts",
+      "import": "./dist/skills/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "prepack": "pnpm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.type-tests.json",
+    "test:package": "node scripts/package-smoke.mjs",
+    "docs:check": "node scripts/check-doc-links.mjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.7.0",
+    "qrcode": "^1.5.4",
+    "yaml": "^2.9.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/qrcode": "^1.5.6",
+    "@vitest/coverage-v8": "4.1.10",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

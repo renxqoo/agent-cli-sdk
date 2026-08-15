@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent CLI Builder 中文版"
+  short_description: "使用 agent-cli-sdk 构建生产级 Agent CLI"
+  default_prompt: "使用 $agent-cli-builder-zh-cn 构建并验证一个可供 AI agent 稳定调用的生产级 CLI。"

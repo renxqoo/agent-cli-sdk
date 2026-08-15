@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>agent-cli-sdk — 一次声明，一份 CLI 和一个 agent skill</title>
+<meta name="description" content="为你公司的 API 打造的 skill 工厂。描述一次 API，你的 agent 就能生成 CLI 和 skill——鉴权、统一输出、类型化错误、渐进式披露全都有。" />
+<link rel="alternate" hreflang="zh-CN" href="index.zh-CN.html" />
+<link rel="alternate" hreflang="en" href="index.html" />
+<style>
+  /* ==========================================================================
+     Direction: "engineering blueprint / terminal editorial".
+     Warm paper, ink, monospace-forward, one signal accent, authentic terminals.
+     ========================================================================== */
+  :root {
+    --paper:      #f6f4ee;
+    --paper-2:    #efece3;
+    --paper-3:    #e7e3d6;
+    --ink:        #17140f;
+    --ink-soft:   #5b554a;
+    --ink-faint:  #8a8275;
+    --hairline:   rgba(23, 20, 15, 0.16);
+    --hairline-2: rgba(23, 20, 15, 0.08);
+    --accent:     #e0490a;   /* signal vermillion — used sparingly */
+    --ok:         #157a3b;   /* exit 0 */
+    --warn:       #b07a00;
+    --term-bg:    #16130e;   /* terminal ink */
+    --term-fg:    #ece7db;
+    --term-dim:   #9a9180;
+    --term-green: #62d48a;
+    --term-blue:  #7fb3ff;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "IBM Plex Mono",
+            "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+            "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    --maxw: 1080px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--sans);
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* faint blueprint grid — barely there, it's texture not decoration */
+    background-image:
+      linear-gradient(var(--hairline-2) 1px, transparent 1px),
+      linear-gradient(90deg, var(--hairline-2) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 28px; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 22px 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .brand {
+    font-family: var(--mono); font-weight: 600; font-size: 15px;
+    letter-spacing: -0.01em; white-space: nowrap;
+  }
+  .brand .pkg { color: var(--ink); }
+  .brand .scope { color: var(--ink-faint); }
+  nav { display: flex; gap: 22px; }
+  nav a {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  nav a:hover { color: var(--ink); text-decoration: none; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 72px 0 28px; }
+  .kicker {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 20px;
+  }
+  .kicker::before { content: "▸ "; }
+  h1 {
+    font-family: var(--mono); font-weight: 700;
+    font-size: clamp(30px, 5.4vw, 54px);
+    line-height: 1.12; letter-spacing: -0.03em; margin-bottom: 22px;
+  }
+  h1 .muted { color: var(--ink-faint); }
+  h1 .sig { color: var(--accent); }
+  .sub { font-size: 18px; color: var(--ink-soft); max-width: 640px; margin-bottom: 32px; }
+  .sub em { font-style: normal; color: var(--ink); }
+
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 14px; font-weight: 600;
+    padding: 12px 20px; border: 1px solid var(--ink); border-radius: 4px;
+    color: var(--ink); background: transparent; cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  }
+  .btn.primary { background: var(--ink); color: var(--paper); }
+  .btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+  .btn.ghost:hover { background: var(--paper-2); }
+  .btn:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 4px 0 rgba(23,20,15,0.12); }
+  .btn:active { transform: translateY(0); box-shadow: none; }
+
+  /* spec meta bar */
+  .spec {
+    display: flex; flex-wrap: wrap; gap: 8px 24px;
+    margin-top: 40px; padding-top: 20px;
+    border-top: 1px solid var(--hairline);
+    font-family: var(--mono); font-size: 12px; color: var(--ink-faint);
+  }
+  .spec span { white-space: nowrap; }
+  .spec b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- terminal ---------- */
+  .terminal {
+    margin: 44px 0 0;
+    background: var(--term-bg); color: var(--term-fg);
+    border: 1px solid var(--ink); border-radius: 6px;
+    box-shadow: 6px 6px 0 rgba(23,20,15,0.10);
+    overflow: hidden;
+    font-family: var(--mono); font-size: 13.5px; line-height: 1.7;
+  }
+  .term-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-bottom: 1px solid rgba(236,231,219,0.12);
+    background: rgba(255,255,255,0.03);
+    font-size: 12px; color: var(--term-dim);
+  }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dots i:nth-child(1) { background: #ff5f56; }
+  .dots i:nth-child(2) { background: #ffbd2e; }
+  .dots i:nth-child(3) { background: #27c93f; }
+  .term-title { flex: 1; }
+  .term-status { color: var(--term-green); }
+  .term-body { padding: 18px 20px; overflow-x: auto; }
+  .line { white-space: pre; }
+  .prompt { color: var(--term-green); }
+  .cmd { color: var(--term-fg); }
+  .arg { color: var(--term-blue); }
+  .out { color: var(--term-dim); }
+  .out .k { color: var(--term-blue); }
+  .out .ok { color: var(--term-green); }
+  .caret {
+    display: inline-block; width: 8px; height: 16px; margin-left: 4px;
+    background: var(--term-green); vertical-align: text-bottom;
+    animation: blink 1.05s steps(2, start) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- sections ---------- */
+  section { padding: 60px 0; border-top: 1px solid var(--hairline); }
+  h2 {
+    font-family: var(--mono); font-weight: 700;
+    font-size: 24px; letter-spacing: -0.02em; margin-bottom: 8px;
+  }
+  .sec-tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+  }
+  .lead { color: var(--ink-soft); margin-bottom: 30px; max-width: 680px; }
+
+  /* steps — numbered spec procedure */
+  .steps { counter-reset: step; }
+  .step {
+    display: grid; grid-template-columns: 56px 1fr; gap: 20px;
+    padding: 22px 0; border-top: 1px solid var(--hairline);
+  }
+  .step:last-child { border-bottom: 1px solid var(--hairline); }
+  .step .num {
+    font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--accent);
+    text-align: right; padding-top: 2px;
+  }
+  .step h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .step p { color: var(--ink-soft); font-size: 15px; }
+  .step code {
+    font-family: var(--mono); font-size: 13px; background: var(--paper-3);
+    padding: 1px 6px; border-radius: 3px; color: var(--ink);
+  }
+
+  /* code block (non-terminal) */
+  pre.code {
+    background: var(--term-bg); color: var(--term-fg);
+    border: 1px solid var(--ink); border-radius: 6px;
+    padding: 20px; overflow-x: auto; font-size: 13px; line-height: 1.65;
+    font-family: var(--mono);
+  }
+  .code-label {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-faint); margin-bottom: 8px;
+  }
+
+  /* feature grid — spec cards */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card {
+    background: var(--paper-2); border: 1px solid var(--hairline);
+    border-radius: 4px; padding: 20px 18px;
+    transition: transform 0.14s ease, box-shadow 0.14s ease;
+    position: relative;
+  }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 6px 0 rgba(23,20,15,0.07); }
+  .card .idx {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+    letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; display: block;
+  }
+  .card h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+  .card p { color: var(--ink-soft); font-size: 14px; }
+  .card code {
+    font-family: var(--mono); font-size: 12.5px; background: var(--paper-3);
+    padding: 1px 5px; border-radius: 3px; color: var(--ink);
+  }
+
+  /* ---------- footer ---------- */
+  footer {
+    border-top: 1px solid var(--hairline); padding: 28px 0 40px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 12px;
+    font-family: var(--mono); font-size: 13px; color: var(--ink-soft);
+  }
+  footer .links { display: flex; gap: 18px; }
+  footer a { color: var(--ink-soft); }
+  footer a:hover { color: var(--accent); }
+
+  .copy-btn {
+    font-family: var(--mono); font-size: 12px; cursor: pointer;
+    background: transparent; border: 1px solid var(--ink);
+    color: var(--ink); border-radius: 4px; padding: 4px 10px;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .copy-btn:hover { background: var(--ink); color: var(--paper); }
+  .copy-btn.done { border-color: var(--ok); color: var(--ok); }
+
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+    nav { gap: 14px; }
+    header { flex-direction: column; align-items: flex-start; }
+    .hero { padding: 48px 0 20px; }
+    .step { grid-template-columns: 1fr; gap: 8px; }
+    .step .num { text-align: left; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <div class="brand"><span class="scope">@renxqoo/</span><span class="pkg">agent-cli-sdk</span></div>
+  <nav>
+    <a href="#how">工作原理</a>
+    <a href="#example">示例</a>
+    <a href="#features">特性</a>
+    <a href="https://github.com/renxqoo/agent-cli-sdk">GitHub</a>
+    <a href="index.html" lang="en" hreflang="en">EN</a>
+  </nav>
+</header>
+
+<div class="hero wrap">
+  <div class="kicker">为你公司的 API 打造的 skill 工厂</div>
+  <h1>一次声明。<br/><span class="muted">一份 CLI <em style="font-style:normal">&amp;</em> 一个</span> <span class="sig">agent skill。</span></h1>
+  <p class="sub">
+    描述一次公司 API，你的 agent 就能生成 <em>命令行</em> <strong>和</strong>
+    <em>agent skill</em>——鉴权、统一输出、类型化错误、渐进式披露全都有。
+    无需学习框架，无需手写样板。
+  </p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/renxqoo/agent-cli-sdk">在 GitHub 查看</a>
+    <a class="btn ghost" href="#how">工作原理</a>
+  </div>
+
+  <div class="spec">
+    <span><b>Node</b> ≥ 20</span>
+    <span>仅 <b>ESM</b></span>
+    <span><b>9</b> 类类型化错误</span>
+    <span><b>0</b> 配置</span>
+    <span><b>MIT</b></span>
+  </div>
+
+  <div class="terminal">
+    <div class="term-head">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="term-title">zsh — 安装</span>
+      <button class="copy-btn" type="button">复制</button>
+      <span class="term-status">exit 0</span>
+    </div>
+    <div class="term-body">
+      <div class="line"><span class="prompt">$ </span><span class="cmd">npm i -g <span class="arg">@renxqoo/agent-cli-sdk</span></span></div>
+      <div class="line out">已安装 1 个包，耗时 2.1s</div>
+      <div class="line out"><span class="ok">✓</span> 内置 skill <span class="k">agent-cli-builder</span> 已安装</div>
+      <div class="line"><span class="prompt">$ </span><span class="cmd">acme <span class="arg">orders list</span> --limit 5 | jq .data</span><span class="caret"></span></div>
+    </div>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <div class="sec-tag">01 / 工作流</div>
+    <h2>工作原理</h2>
+    <p class="lead">从「这是我的 API」到「所有 agent 都能调用」，三步完成。</p>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <div>
+          <h3>安装</h3>
+          <p>安装包的同时，也会把内置的 <code>agent-cli-builder</code> skill 装进你的 agent——它教 agent 生成 CLI，而不只是会读 CLI。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <div>
+          <h3>描述</h3>
+          <p>把 API 规范交给 agent——OpenAPI、一个 cURL 示例，或一段大白话。它用 <code>defineCommand</code> 声明写出约 20 行的命令代码。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <div>
+          <h3>生成与同步</h3>
+          <p><code>skills gen</code> 写出 SKILL.md；<code>skills sync</code> 把它分发到 Claude、Codex 及所有其他 agent 目录。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="example">
+  <div class="wrap">
+    <div class="sec-tag">02 / 唯一事实来源</div>
+    <h2>一次声明，双端复用</h2>
+    <p class="lead">同一条命令既是人类 CLI 又是 agent skill——单一来源，永不漂移。</p>
+    <div class="code-label">一条命令的全部业务代码</div>
+    <pre class="code">import { defineCliApp, defineCommand } from "@renxqoo/agent-cli-sdk";
+import * as z from "zod";
+
+const app = await defineCliApp({
+  name: "acme",
+  binName: "acme",
+  baseUrl: "https://api.acme.com",
+  commands: {
+    orders: defineCommand({
+      name: "orders",
+      description: "List orders",
+      args: { schema: z.object({ limit: z.coerce.number().default(20) }) },
+      async run(ctx, args) {
+        const res = await ctx.get("/orders", { limit: args.limit });
+        return { data: res.data, meta: { count: res.data.length } };
+      },
+    }),
+  },
+});</pre>
+    <p style="margin-top:14px; color:var(--ink-soft); font-size:14px;">
+      人类运行 <code style="font-family:var(--mono);font-size:13px;background:var(--paper-3);padding:1px 6px;border-radius:3px">acme orders list | jq</code>。
+      Agent 读取 <code style="font-family:var(--mono);font-size:13px;background:var(--paper-3);padding:1px 6px;border-radius:3px">skills/acme/SKILL.md</code>，用同样的方式调用。
+    </p>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-tag">03 / 为 agent 而生</div>
+    <h2>agent 所需的一切</h2>
+    <p class="lead">可靠地调用 API——开箱即用。</p>
+    <div class="grid">
+      <div class="card"><span class="idx">01 / envelope</span><h3>JSON 信封</h3><p>成功是 stdout 上的 <code>{ok, data, meta}</code>；其余一切都在 stderr。可 <code>| jq</code> 组合。</p></div>
+      <div class="card"><span class="idx">02 / errors</span><h3>9 类类型化错误</h3><p>校验、鉴权、网络、未找到、策略……各自映射到一个 exit code，agent 可据此分支。</p></div>
+      <div class="card"><span class="idx">03 / auth</span><h3>OAuth 2.1</h3><p>设备码流程、PKCE、client-credentials，带 401 自动续期——一行配置搞定。</p></div>
+      <div class="card"><span class="idx">04 / disclosure</span><h3>渐进式披露</h3><p>SKILL.md 自动生成并同步；agent 按需懒加载，未用到的 API 零 token 开销。</p></div>
+      <div class="card"><span class="idx">05 / schema</span><h3>Zod 单一来源</h3><p>一份 schema 同时驱动校验、类型、帮助与 <code>--input-schema</code>。没有第二套协议。</p></div>
+      <div class="card"><span class="idx">06 / plugins</span><h3>插件系统</h3><p>Vite 式 <code>apply</code> + <code>provides</code> + 生命周期钩子。鉴权和安装器本身也只是插件。</p></div>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <span>MIT © <a href="https://github.com/renxqoo">renxqoo</a></span>
+  <div class="links">
+    <a href="https://github.com/renxqoo/agent-cli-sdk">GitHub</a>
+    <a href="https://github.com/renxqoo/agent-cli-sdk#readme">README</a>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var btn = document.querySelector('.copy-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var text = '@renxqoo/agent-cli-sdk';
+      function done() {
+        btn.classList.add('done');
+        btn.textContent = '已复制';
+        setTimeout(function () { btn.classList.remove('done'); btn.textContent = '复制'; }, 1500);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+      } else {
+        done();
+      }
+    });
+  })();
+</script>
+</body>
+</html>

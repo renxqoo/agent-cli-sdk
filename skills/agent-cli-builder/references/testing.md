@@ -18,7 +18,7 @@ Code tests verify the CLI contract. Forward evaluation verifies that an agent ca
 | CLI end-to-end     | argv, routes, plugins, output, exit code      | JSON success, validation error, HTTP error   |
 | Structured input   | sources, Zod, redaction, write policy, stdin  | Valid source, limits, discovery, policy      |
 | Build and package  | ESM entry, bin, file list                     | Build, `--help`, package dry-run             |
-| Skill validation   | Frontmatter, links, AUTO-GEN                  | Validator and generator `--check`            |
+| Skill validation   | Frontmatter, links, AUTO-GEN                  | Validator                                    |
 | Forward evaluation | Triggering, calls, safety, final result       | Typical, paraphrase, exclusion, failure      |
 
 Use mocks, sandboxes, or dedicated records for every write. Never use production credentials or data without explicit authorization.

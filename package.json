@@ -1,6 +1,6 @@
 {
   "name": "@renxqoo/agent-cli-sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Agent-native CLI framework — a command-line framework that lets AI agents consume business data in a structured way (auth, unified output, errors, credentials, pipes, skills)",
   "keywords": [
     "agent",

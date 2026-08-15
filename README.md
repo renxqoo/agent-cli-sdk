@@ -33,12 +33,17 @@ defineCommand(name / description / zod / run)
 The fastest path — you don't even write the code:
 
 ```bash
-# 1. Install (this also installs the agent-cli-builder skill)
-npm i -g @renxqoo/agent-cli-sdk
+# 1. Add the SDK to a new business package
+npm install @renxqoo/agent-cli-sdk
 ```
 
 ```text
-# 2. Give the API to your agent
+# 2. Install the bundled skill into your agent (the package ships it, but does not auto-install it)
+"Install this skill for me: https://github.com/renxqoo/agent-cli-sdk/tree/main/skills/agent-cli-builder"
+```
+
+```text
+# 3. Give the API to your agent
 "Use the agent-cli-builder skill to wrap https://api.acme.com's /orders endpoints
  into a CLI named 'acme'. List, get, update orders. OAuth device flow."
 ```
@@ -46,7 +51,7 @@ npm i -g @renxqoo/agent-cli-sdk
 The agent creates `src/commands/*.ts` and `src/index.ts`, following the SDK contract (Zod schemas, `ctx.get`, typed errors, `errs.*`). Then:
 
 ```bash
-# 3. Build, generate the skill, sync it to every agent directory
+# 4. Build, generate the skill, sync it to every agent directory
 acme skills gen acme --init   # SKILL.md with an auto-generated command table
 acme skills sync              # ~/.agents + detected ~/.claude/.codex/.cursor/...
 ```

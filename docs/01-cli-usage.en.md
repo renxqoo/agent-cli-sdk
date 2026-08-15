@@ -158,7 +158,7 @@ See "stdout/stderr allocation rules" in `03-envelopes.md`.
 
 ## Pagination: the agent decides whether to continue
 
-Backend data can be large, so agent-cli-sdk fetches one page by default, but tells you **completeness** and the **continuation cursor** in the `meta` envelope:
+Backend data can be large, so agent-cli-sdk fetches one page by default, but tells you **completeness** and the **continuation cursor** in the `meta` of the unified output format:
 
 ```bash
 $ rxcli-orders list --limit 30

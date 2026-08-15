@@ -292,9 +292,10 @@
       <span class="term-status">exit 0</span>
     </div>
     <div class="term-body">
-      <div class="line"><span class="prompt">$ </span><span class="cmd">npm i -g <span class="arg">@renxqoo/agent-cli-sdk</span></span></div>
+      <div class="line"><span class="prompt">$ </span><span class="cmd">npm install <span class="arg">@renxqoo/agent-cli-sdk</span></span></div>
       <div class="line out">added 1 package in 2.1s</div>
-      <div class="line out"><span class="ok">✓</span> bundled skill <span class="k">agent-cli-builder</span> installed</div>
+      <div class="line out"># the package ships <span class="k">skills/agent-cli-builder</span> — install it into your agent:</div>
+      <div class="line out">#   "install this skill: github.com/renxqoo/agent-cli-sdk/tree/main/skills/agent-cli-builder"</div>
       <div class="line"><span class="prompt">$ </span><span class="cmd">acme <span class="arg">orders list</span> --limit 5 | jq .data</span><span class="caret"></span></div>
     </div>
   </div>
@@ -310,7 +311,7 @@
         <div class="num">1</div>
         <div>
           <h3>Install</h3>
-          <p>Installing the package also installs the bundled <code>agent-cli-builder</code> skill into your agent — it teaches the agent to generate a CLI, not just read one.</p>
+          <p>Just have your agent install the bundled <code>agent-cli-builder</code> skill — tell it “install this skill: github.com/renxqoo/agent-cli-sdk/tree/main/skills/agent-cli-builder”. It teaches the agent to generate a CLI, not just read one.</p>
         </div>
       </div>
       <div class="step">
@@ -369,7 +370,7 @@ const app = await defineCliApp({
     <h2>Everything an agent needs</h2>
     <p class="lead">Reliable API calling — out of the box.</p>
     <div class="grid">
-      <div class="card"><span class="idx">01 / envelope</span><h3>JSON envelope</h3><p>Success is <code>{ok, data, meta}</code> on stdout; everything else on stderr. <code>| jq</code>-composable.</p></div>
+      <div class="card"><span class="idx">01 / output</span><h3>JSON unified output format</h3><p>Success is <code>{ok, data, meta}</code> on stdout; everything else on stderr. <code>| jq</code>-composable.</p></div>
       <div class="card"><span class="idx">02 / errors</span><h3>9 typed errors</h3><p>Validation, auth, network, not-found, policy… each mapped to an exit code an agent can branch on.</p></div>
       <div class="card"><span class="idx">03 / auth</span><h3>OAuth 2.1</h3><p>Device flow, PKCE, client-credentials with 401 auto-refresh — one line of config.</p></div>
       <div class="card"><span class="idx">04 / disclosure</span><h3>Progressive disclosure</h3><p>SKILL.md auto-generated and synced; agents load it lazily so unused APIs cost zero tokens.</p></div>

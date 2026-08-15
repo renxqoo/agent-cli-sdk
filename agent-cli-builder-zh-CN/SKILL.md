@@ -1,6 +1,6 @@
 ---
-name: agent-cli-builder-zh-cn
-description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的 TypeScript CLI 中文版。当用户要新建命令行工具、把 API 或内部服务封装成 CLI，或为基于该框架的 CLI 增加鉴权、结构化输出、错误处理、分页、管道、Skill 分发或测试时使用；通用 shell 脚本、非 CLI 应用及明确采用其他 CLI 框架的任务不使用。
+name: agent-cli-builder
+description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的 TypeScript CLI。当用户要新建命令行工具、把 API 或内部服务封装成 CLI，或为基于该框架的 CLI 增加鉴权、结构化输出、错误处理、分页、管道、Skill 分发或测试时使用；通用 shell 脚本、非 CLI 应用及明确采用其他 CLI 框架的任务不使用。
 ---
 
 # Agent CLI Builder（中文）

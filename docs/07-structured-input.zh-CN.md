@@ -154,7 +154,7 @@ policy: {
 SDK 不实现自己的管道或工作流语言。成功数据保留在 stdout，错误保留在 stderr，退出码决定 `&&` / `||` 的行为。
 
 ```bash
-# 过滤某个命令的 JSON 信封（envelope）。
+# 过滤某个命令的 JSON 统一输出格式。
 orders list --status paid --limit 100 | jq '.data[] | select(.total > 1000)'
 
 # 将生成的文档喂给某个 JSON 命令。

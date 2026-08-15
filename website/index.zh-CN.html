@@ -292,9 +292,10 @@
       <span class="term-status">exit 0</span>
     </div>
     <div class="term-body">
-      <div class="line"><span class="prompt">$ </span><span class="cmd">npm i -g <span class="arg">@renxqoo/agent-cli-sdk</span></span></div>
+      <div class="line"><span class="prompt">$ </span><span class="cmd">npm install <span class="arg">@renxqoo/agent-cli-sdk</span></span></div>
       <div class="line out">已安装 1 个包，耗时 2.1s</div>
-      <div class="line out"><span class="ok">✓</span> 内置 skill <span class="k">agent-cli-builder</span> 已安装</div>
+      <div class="line out"># 包内置 <span class="k">skills/agent-cli-builder</span> —— 把它装进你的 agent:</div>
+      <div class="line out">#   "帮我安装这个 skill: github.com/renxqoo/agent-cli-sdk/tree/main/skills/agent-cli-builder"</div>
       <div class="line"><span class="prompt">$ </span><span class="cmd">acme <span class="arg">orders list</span> --limit 5 | jq .data</span><span class="caret"></span></div>
     </div>
   </div>
@@ -310,7 +311,7 @@
         <div class="num">1</div>
         <div>
           <h3>安装</h3>
-          <p>安装包的同时，也会把内置的 <code>agent-cli-builder</code> skill 装进你的 agent——它教 agent 生成 CLI，而不只是会读 CLI。</p>
+          <p>直接让 agent 安装内置的 <code>agent-cli-builder</code> skill——告诉它「帮我安装这个 skill：github.com/renxqoo/agent-cli-sdk/tree/main/skills/agent-cli-builder」。它教 agent 生成 CLI，而不只是会读 CLI。</p>
         </div>
       </div>
       <div class="step">
@@ -369,7 +370,7 @@ const app = await defineCliApp({
     <h2>agent 所需的一切</h2>
     <p class="lead">可靠地调用 API——开箱即用。</p>
     <div class="grid">
-      <div class="card"><span class="idx">01 / envelope</span><h3>JSON 信封</h3><p>成功是 stdout 上的 <code>{ok, data, meta}</code>；其余一切都在 stderr。可 <code>| jq</code> 组合。</p></div>
+      <div class="card"><span class="idx">01 / output</span><h3>JSON 统一输出格式</h3><p>成功是 stdout 上的 <code>{ok, data, meta}</code>；其余一切都在 stderr。可 <code>| jq</code> 组合。</p></div>
       <div class="card"><span class="idx">02 / errors</span><h3>9 类类型化错误</h3><p>校验、鉴权、网络、未找到、策略……各自映射到一个 exit code，agent 可据此分支。</p></div>
       <div class="card"><span class="idx">03 / auth</span><h3>OAuth 2.1</h3><p>设备码流程、PKCE、client-credentials，带 401 自动续期——一行配置搞定。</p></div>
       <div class="card"><span class="idx">04 / disclosure</span><h3>渐进式披露</h3><p>SKILL.md 自动生成并同步；agent 按需懒加载，未用到的 API 零 token 开销。</p></div>

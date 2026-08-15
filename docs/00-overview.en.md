@@ -35,7 +35,7 @@ The core tension it resolves is: **backend interfaces differ wildly (REST/GraphQ
 │  agent / terminal user                                            │
 │  — compose commands with unix pipes                               │
 │  — read skill self-service discovery commands                     │
-│  — parse the stdout envelope for data, the stderr envelope for errors │
+│  — parse the stdout unified output format for data, the stderr unified output format for errors │
 ├──────────────────────────────────────────────────────────────────┤
 │  business package (standalone npm, @org/rxcli-xxx)               │
 │  — write function-style commands (defineCommand, <Args, Result>) │
@@ -47,7 +47,7 @@ The core tension it resolves is: **backend interfaces differ wildly (REST/GraphQ
 ├──────────────────────────────────────────────────────────────────┤
 │  @renxqoo/agent-cli-sdk (base package, maintained in this repo)  │
 │  — ctx request methods (get/post/... with auth + 401 auto-refresh)│
-│  — envelope: the unified success/error contract                   │
+│  — unified output format: the unified success/error contract                   │
 │  — error classification: 9 classes + exit codes + typed ctor      │
 │  — auth: defineAuth standard factory + composable auth blocks     │
 │  — plugin system: vite-style Plugin + 6 hooks + 3 enforce tiers   │
@@ -107,9 +107,9 @@ This is the decision table finalized after the project discussion. **All subsequ
 | 4   | Requests          | **drop the client concept** (no createClient/Client); request methods `get/post/...` all live on `ctx`; auth belongs to SDK internals + auth plugins | `02-sdk-guide.md`   |
 | 5   | transport         | low-level `ctx.request` + high-level convenience methods (`ctx.get` etc.); **REST first**                                                        | `02-sdk-guide.md`   |
 | 6   | Cross-cutting     | **vite-style plugins** (hooks are the Plugin interface; defineCli takes `plugins: []`, no inline hooks)                                          | `02-sdk-guide.md`   |
-| 7   | Errors            | typed errors + structured envelope to stderr + **9-class exit codes**; thrown into the observeError/handleError chain                            | `04-errors.md`      |
-| 8   | Envelope          | success is also enveloped `{ok, data, meta}`; **stdout = data / stderr = everything**                                                            | `03-envelopes.md`   |
-| 9   | Pagination        | envelope `meta.pagination` + `complete` + `nextToken`, **agent decides whether to continue**                                                     | `03-envelopes.md`   |
+| 7   | Errors            | typed errors + structured unified output format to stderr + **9-class exit codes**; thrown into the observeError/handleError chain                            | `04-errors.md`      |
+| 8   | Unified output format | success also uses the unified output format `{ok, data, meta}`; **stdout = data / stderr = everything**                                                            | `03-envelopes.md`   |
+| 9   | Pagination        | unified output format `meta.pagination` + `complete` + `nextToken`, **agent decides whether to continue**                                                     | `03-envelopes.md`   |
 | 10  | Auth              | `defineAuth` covers standard OAuth/Bearer/API key/Basic; special protocols compose public Plugins and base blocks                                | `05-credentials.md` |
 | 11  | Pipes             | unix pipes; **pass references + IDs**; local filtering to jq                                                                                     | `01-cli-usage.md`   |
 | 12  | Filtering         | `--limit/--offset` pass through to the backend; `--filter`/field selection **to jq**                                                              | `01-cli-usage.md`   |

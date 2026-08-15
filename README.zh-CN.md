@@ -33,12 +33,17 @@ defineCommand(name / description / zod / run)
 最快的路径 —— 你连代码都不用写:
 
 ```bash
-# 1. 安装(同时会装 agent-cli-builder skill)
-npm i -g @renxqoo/agent-cli-sdk
+# 1. 把 SDK 加进一个新的业务包
+npm install @renxqoo/agent-cli-sdk
 ```
 
 ```text
-# 2. 把 API 描述给 agent
+# 2. 把内置 skill 装进你的 agent(包会自带它,但不会自动安装)
+"帮我安装这个 skill: https://github.com/renxqoo/agent-cli-sdk/tree/main/skills/agent-cli-builder"
+```
+
+```text
+# 3. 把 API 描述给 agent
 "用 agent-cli-builder skill 把 https://api.acme.com 的 /orders 接口
  包装成一个叫 'acme' 的 CLI。支持列出、查看、更新订单。走 OAuth device flow。"
 ```
@@ -46,7 +51,7 @@ npm i -g @renxqoo/agent-cli-sdk
 agent 会按 SDK 契约(Zod schema、`ctx.get`、类型化错误、`errs.*`)生成 `src/commands/*.ts` 和 `src/index.ts`。然后:
 
 ```bash
-# 3. 编译 + 生成 skill + 同步到所有 agent 目录
+# 4. 编译 + 生成 skill + 同步到所有 agent 目录
 acme skills gen acme --init   # 生成带自动命令表的 SKILL.md
 acme skills sync              # ~/.agents + 探测到的 ~/.claude/.codex/.cursor/...
 ```

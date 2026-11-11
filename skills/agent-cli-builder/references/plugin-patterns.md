@@ -13,7 +13,7 @@ Use plugins for cross-cutting behavior such as authentication, fixed headers, si
 
 | Hook                 | Runs                                 | Typical use                                          |
 | -------------------- | ------------------------------------ | ---------------------------------------------------- |
-| `apply`              | Once at assembly, before routing     | Resolve `services.localState.store`, fill `provides` |
+| `setup`              | Once at assembly, before routing     | Resolve `services.localState.store`, fill `provides` |
 | `onAppRun`           | Once per `app.run`, before routing   | Best-effort startup awareness                        |
 | `afterAppRun`        | Once per `app.run`, after it settles | Best-effort operational notices (update awareness)   |
 | `beforeCommand`      | Before command `run`                 | Resolve identity, initialize state, reject execution |
@@ -25,7 +25,7 @@ Use plugins for cross-cutting behavior such as authentication, fixed headers, si
 | `observeError`       | After an error is normalized         | Telemetry that cannot change the result              |
 | `handleError`        | After error observers                | Explicitly pass, replace, or recover                 |
 
-`enforce` supports `"pre"`, `"normal"`, and `"post"`; omitting it means `"normal"`. Hooks run pre, normal, then post, preserving registration order inside each tier. `apply` is not a hook: `defineCliApp` runs it for every plugin, in registration order, before routing compiles; a thrown error aborts startup.
+`enforce` supports `"pre"`, `"normal"`, and `"post"`; omitting it means `"normal"`. Hooks run pre, normal, then post, preserving registration order inside each tier. `setup` is not a hook: `defineCliApp` runs it for every plugin, in registration order, before routing compiles; a thrown error aborts startup.
 
 Typical order:
 

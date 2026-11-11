@@ -30,7 +30,9 @@ export function encodeJsonDocument(data: Record<string, unknown>, label: string)
   try {
     const encoded = JSON.stringify(data, null, 2);
     if (encoded === undefined) throw new Error("document is not JSON serializable");
-    return `${encoded}\n`;
+    const document = `${encoded}\n`;
+    decodeJsonDocument(document, label);
+    return document;
   } catch (cause) {
     if (cause instanceof ConfigError) throw cause;
     throw invalidDocument(label, cause);

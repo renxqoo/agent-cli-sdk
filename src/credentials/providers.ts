@@ -6,7 +6,8 @@
  * 默认 5 个 provider:flag(1)/env api-key(5)/env bearer(6)/file(10)/oauth(20)。
  */
 
-import type { CredentialProvider, ProviderContext, TokenResult, IdentityHint } from "./types.js";
+import type { CredentialProvider, ProviderContext, TokenResult } from "./types.js";
+import { oauthIdentity, oauthSessionId } from "./oauth-session.js";
 
 // ============================================================================
 // 默认 provider:defaultProviders() 返回 5 个,供业务包自写的 auth Plugin 用
@@ -121,20 +122,10 @@ export function oauthProvider(): CredentialProvider {
         ...(expiresAt ? { expiresAt } : {}),
         ...(typeof refreshToken === "string" && refreshToken ? { refreshToken } : {}),
         refreshable: true,
+        sessionId: oauthSessionId(creds),
+        identity: oauthIdentity(creds),
       };
       return result;
-    },
-    async resolveIdentity(pctx: ProviderContext): Promise<IdentityHint | null> {
-      const creds = await pctx.configStore.loadCredentials(pctx.namespace);
-      if (!creds) return null;
-      if (creds.authMethod === "client_credentials") return { identity: "bot" };
-      if (!creds.user || typeof creds.user !== "object") return null;
-      const u = creds.user as { userId?: string; name?: string };
-      return {
-        identity: "user",
-        ...(u.userId ? { userId: u.userId } : {}),
-        ...(u.name ? { name: u.name } : {}),
-      };
     },
   };
 }
@@ -192,20 +183,6 @@ export async function resolveWithChain(
     if (token) {
       return { token, provider };
     }
-  }
-  return null;
-}
-
-/** 用 chain 结果尝试推断 identity(调第一个能返回的 resolveIdentity)。 */
-export async function resolveIdentityWithChain(
-  providers: CredentialProvider[],
-  pctx: ProviderContext,
-): Promise<IdentityHint | null> {
-  const sorted = [...providers].sort((a, b) => (a.priority?.() ?? 10) - (b.priority?.() ?? 10));
-  for (const provider of sorted) {
-    if (!provider.resolveIdentity) continue;
-    const hint = await provider.resolveIdentity(pctx);
-    if (hint) return hint;
   }
   return null;
 }

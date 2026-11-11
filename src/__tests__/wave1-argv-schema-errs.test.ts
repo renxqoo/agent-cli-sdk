@@ -11,7 +11,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import * as z from "zod";
 import { compileCommandSchema, compiledSchemaKey } from "../command-schema.js";
-import { defineCommand, defineCli, errs } from "../index.js";
+import { defineCommand, defineCli } from "../index.js";
 import { SUBTYPE_REGISTRY } from "../errs/index.js";
 
 // ---------------------------------------------------------------------------
@@ -31,17 +31,24 @@ describe("L1: boolean field whose flag name starts with no-", () => {
 
   it("still supports standard --no-<x> negation for an unrelated boolean", async () => {
     const withVerbose = compileCommandSchema("cfg2", {
-      schema: z.object({ verbose: z.boolean().default(false) }),
+      schema: z.object({ verbose: z.boolean().default(true) }),
     });
     await expect(withVerbose.resolve(["--no-verbose"], Readable.from([]))).resolves.toEqual({
       verbose: false,
     });
   });
 
-  it("rejects an unknown --no-foo when no positive boolean exists", async () => {
-    await expect(schema.resolve(["--no-foo"], Readable.from([]))).rejects.toThrow(
-      errs.ValidationError,
-    );
+  it("rejects a mistyped negation even when the following value could be positional", async () => {
+    const withPositional = compileCommandSchema("cfg2", {
+      schema: z.object({ verbose: z.boolean().default(false), name: z.string().optional() }),
+      pos: ["name"],
+    });
+    await expect(
+      withPositional.resolve(["--no-verbos", "foo"], Readable.from([])),
+    ).rejects.toMatchObject({
+      subtype: "invalid_argument",
+      message: expect.stringContaining("--no-verbos"),
+    });
   });
 });
 

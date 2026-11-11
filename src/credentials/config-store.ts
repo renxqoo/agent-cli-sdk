@@ -14,16 +14,13 @@ import { join } from "node:path";
 import {
   mkdirSync,
   readFileSync,
-  writeFileSync,
   existsSync,
   chmodSync,
   unlinkSync,
-  renameSync,
   rmSync,
   readdirSync,
 } from "node:fs";
-import { randomUUID } from "node:crypto";
-import type { ConfigStore } from "./types.js";
+import type { ConfigStore, CredentialTransaction } from "./types.js";
 import { ConfigError } from "../errs/index.js";
 import {
   assertCredentialNamespace,
@@ -32,6 +29,7 @@ import {
   roundTripJsonDocument,
 } from "./codec.js";
 import { withFileLock } from "../infra/file-lock.js";
+import { writeAtomicFile } from "../infra/atomic-file.js";
 
 // ============================================================================
 // fileStore:磁盘实现
@@ -41,16 +39,10 @@ export interface FileStoreOptions {
   /** 必填:根目录(由业务 app 决定,agent-cli-sdk 不内置默认)。 */
   dir: string;
   /**
-   * withLock 获取跨进程锁的最长等待(ms),用于 OAuth refresh 的读→改→写事务。
+   * transactCredentials 获取跨进程锁的最长等待(ms),用于 OAuth refresh 的读→改→写事务。
    * 默认 10_000。拿不到锁(另一进程持有且未释放)时抛错。
    */
   lockTimeoutMs?: number;
-  /**
-   * 跨进程锁的陈旧回收阈值(ms):锁属主进程仍存活,但持有时间超过该值时,等待方可
-   * 回收。默认 60_000。OAuth refresh 含网络调用,慢服务器下可调大以避免误回收导致
-   * 两个进程同时写凭证。详见 infra/file-lock.ts 的 staleAfterMs。
-   */
-  lockStaleAfterMs?: number;
 }
 
 /**
@@ -81,8 +73,6 @@ export function fileStore(opts: FileStoreOptions): ConfigStore {
     }
   };
 
-  // B4: sweep stale temp files left by a process killed mid-write. Called once per
-  // store; the common recovery case is the next CLI run after a crash.
   const sweepStaleTemps = (targetDir: string) => {
     if (!existsSync(targetDir)) return;
     let entries: string[];
@@ -92,7 +82,14 @@ export function fileStore(opts: FileStoreOptions): ConfigStore {
       return;
     }
     for (const entry of entries) {
-      if (entry.endsWith(".tmp")) {
+      const match = /^[a-z0-9-]+\.json\.(\d+)\.[a-f0-9-]{36}\.tmp$/.exec(entry);
+      if (match) {
+        try {
+          process.kill(Number(match[1]), 0);
+          continue;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") continue;
+        }
         try {
           rmSync(join(targetDir, entry), { force: true });
         } catch {
@@ -101,21 +98,12 @@ export function fileStore(opts: FileStoreOptions): ConfigStore {
       }
     }
   };
-  sweepStaleTemps(credsDir);
-  sweepStaleTemps(configDir);
 
   const writeJsonAtomic = (path: string, data: Record<string, unknown>) => {
-    const temp = `${path}.${process.pid}.${randomUUID()}.tmp`;
+    const document = encodeJsonDocument(data, path);
     try {
-      writeFileSync(temp, encodeJsonDocument(data, path), { mode: 0o600 });
-      try {
-        chmodSync(temp, 0o600);
-      } catch {
-        /* 非 POSIX 忽略 */
-      }
-      renameSync(temp, path);
+      writeAtomicFile(path, document);
     } catch (cause) {
-      rmSync(temp, { force: true });
       throw new ConfigError({
         subtype: "invalid_config",
         message: `Failed to write config: ${path}`,
@@ -150,7 +138,7 @@ export function fileStore(opts: FileStoreOptions): ConfigStore {
     }
   };
 
-  return {
+  const store: ConfigStore = {
     async loadCredentials(namespace) {
       assertCredentialNamespace(namespace);
       const p = join(credsDir, `${namespace}.json`);
@@ -158,26 +146,11 @@ export function fileStore(opts: FileStoreOptions): ConfigStore {
     },
 
     async saveCredentials(namespace, data) {
-      assertCredentialNamespace(namespace);
-      ensureDirs();
-      const p = join(credsDir, `${namespace}.json`);
-      writeJsonAtomic(p, data);
+      await store.transactCredentials(namespace, async (transaction) => transaction.write(data));
     },
 
     async clearCredentials(namespace) {
-      assertCredentialNamespace(namespace);
-      const p = join(credsDir, `${namespace}.json`);
-      if (existsSync(p)) {
-        try {
-          unlinkSync(p);
-        } catch (cause) {
-          throw new ConfigError({
-            subtype: "invalid_config",
-            message: `Failed to clear credentials: ${p}`,
-            cause,
-          });
-        }
-      }
+      await store.transactCredentials(namespace, async (transaction) => transaction.clear());
     },
 
     async loadConfig(namespace) {
@@ -188,18 +161,39 @@ export function fileStore(opts: FileStoreOptions): ConfigStore {
     async saveConfig(namespace, data) {
       assertCredentialNamespace(namespace);
       ensureDirs();
+      sweepStaleTemps(configDir);
       writeJsonAtomic(join(configDir, `${namespace}.json`), data);
     },
 
-    async withLock<T>(namespace: string, fn: () => Promise<T>): Promise<T> {
+    async transactCredentials(namespace, operation) {
       assertCredentialNamespace(namespace);
       ensureDirs();
-      return withFileLock(credsDir, namespace, fn, {
-        timeoutMs: opts.lockTimeoutMs ?? 10_000,
-        ...(opts.lockStaleAfterMs !== undefined ? { staleAfterMs: opts.lockStaleAfterMs } : {}),
-      });
+      return withFileLock(
+        credsDir,
+        namespace,
+        async () => {
+          sweepStaleTemps(credsDir);
+          const path = join(credsDir, `${namespace}.json`);
+          return transactDocument(
+            () => readCredentials(path),
+            (document) => {
+              if (document) writeJsonAtomic(path, document);
+              else {
+                try {
+                  unlinkSync(path);
+                } catch (error) {
+                  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+                }
+              }
+            },
+            operation,
+          );
+        },
+        { timeoutMs: opts.lockTimeoutMs ?? 35_000 },
+      );
     },
   };
+  return store;
 }
 
 // ============================================================================
@@ -226,18 +220,18 @@ export function memoryStore(
     config: Record<string, Record<string, unknown>>;
   };
 } {
-  const creds: Record<string, Record<string, unknown>> = {};
+  const creds: Record<string, Record<string, unknown>> = Object.create(null);
   for (const [namespace, data] of Object.entries(initial.credentials ?? {})) {
     assertCredentialNamespace(namespace);
     creds[namespace] = roundTripJsonDocument(data, `credentials:${namespace}`);
   }
-  const config: Record<string, Record<string, unknown>> = {};
+  const config: Record<string, Record<string, unknown>> = Object.create(null);
   for (const [namespace, data] of Object.entries(initial.config ?? {})) {
     assertCredentialNamespace(namespace);
     config[namespace] = roundTripJsonDocument(data, `config:${namespace}`);
   }
 
-  // In-process mutex per namespace (single-process equivalent of withLock).
+  // In-process mutex per namespace (single-process equivalent transaction lock).
   const mutexes = new Map<string, Promise<unknown>>();
   const runLocked = async <T>(namespace: string, fn: () => Promise<T>): Promise<T> => {
     const prev = mutexes.get(namespace) ?? Promise.resolve();
@@ -245,15 +239,14 @@ export function memoryStore(
     const next = new Promise<void>((resolve) => {
       release = resolve;
     });
-    mutexes.set(
-      namespace,
-      prev.then(() => next),
-    );
+    const queued = prev.then(() => next);
+    mutexes.set(namespace, queued);
     await prev;
     try {
       return await fn();
     } finally {
       release();
+      if (mutexes.get(namespace) === queued) mutexes.delete(namespace);
     }
   };
 
@@ -265,12 +258,10 @@ export function memoryStore(
         : null;
     },
     async saveCredentials(namespace, data) {
-      assertCredentialNamespace(namespace);
-      creds[namespace] = roundTripJsonDocument(data, `credentials:${namespace}`);
+      await store.transactCredentials(namespace, async (transaction) => transaction.write(data));
     },
     async clearCredentials(namespace) {
-      assertCredentialNamespace(namespace);
-      delete creds[namespace];
+      await store.transactCredentials(namespace, async (transaction) => transaction.clear());
     },
     async loadConfig(namespace) {
       assertCredentialNamespace(namespace);
@@ -282,22 +273,70 @@ export function memoryStore(
       assertCredentialNamespace(namespace);
       config[namespace] = roundTripJsonDocument(data, `config:${namespace}`);
     },
-    async withLock<T>(namespace: string, fn: () => Promise<T>): Promise<T> {
+    async transactCredentials(namespace, operation) {
       assertCredentialNamespace(namespace);
-      return runLocked(namespace, fn);
+      return runLocked(namespace, async () => {
+        return transactDocument(
+          () => creds[namespace] ?? null,
+          (document) => {
+            if (document) creds[namespace] = document;
+            else delete creds[namespace];
+          },
+          operation,
+        );
+      });
     },
   };
 
   return Object.assign(store, {
     _snapshot: () => ({
-      credentials: roundTripJsonDocument(creds, "credentials snapshot") as Record<
-        string,
-        Record<string, unknown>
-      >,
-      config: roundTripJsonDocument(config, "config snapshot") as Record<
-        string,
-        Record<string, unknown>
-      >,
+      credentials: Object.fromEntries(
+        Object.entries(creds).map(([key, value]) => [key, roundTripJsonDocument(value, key)]),
+      ),
+      config: Object.fromEntries(
+        Object.entries(config).map(([key, value]) => [key, roundTripJsonDocument(value, key)]),
+      ),
     }),
   });
+}
+
+/** Stage mutations, commit once on success, and invalidate escaped transaction handles. */
+async function transactDocument<T>(
+  load: () => Record<string, unknown> | null,
+  commit: (document: Record<string, unknown> | null) => void,
+  operation: (transaction: CredentialTransaction) => Promise<T>,
+): Promise<T> {
+  let document: Record<string, unknown> | null | undefined;
+  let dirty = false;
+  let active = true;
+  const assertActive = () => {
+    if (!active)
+      throw new ConfigError({
+        subtype: "invalid_config",
+        message: "Credential transaction is closed",
+      });
+  };
+  try {
+    const result = await operation({
+      read() {
+        assertActive();
+        if (document === undefined) document = load();
+        return document ? roundTripJsonDocument(document, "credential transaction") : null;
+      },
+      write(value) {
+        assertActive();
+        document = roundTripJsonDocument(value, "credential transaction");
+        dirty = true;
+      },
+      clear() {
+        assertActive();
+        document = null;
+        dirty = true;
+      },
+    });
+    if (dirty) commit(document ?? null);
+    return result;
+  } finally {
+    active = false;
+  }
 }

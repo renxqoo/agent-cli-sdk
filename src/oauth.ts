@@ -1,6 +1,6 @@
 /** Public OAuth façade. Protocol implementation lives in OAuthClient. */
 import { createHash, randomBytes } from "node:crypto";
-import type { ConfigStore } from "./credentials/types.js";
+import type { ConfigStore, OAuthSessionRef } from "./credentials/types.js";
 import type { RequestOptions } from "./types.js";
 import { OAuthClient } from "./oauth-client.js";
 import { OAuthFlowCoordinator } from "./auth/flow-coordinator.js";
@@ -24,8 +24,11 @@ export type {
 export { OAuthClient } from "./oauth-client.js";
 
 export function injectAuthHeader(request: RequestOptions, token: string, style: AuthStyle): void {
-  const headers = request.headers ?? {};
-  headers[style === "x-api-key" ? "x-api-key" : "authorization"] =
+  const name = style === "x-api-key" ? "x-api-key" : "authorization";
+  const headers = Object.fromEntries(
+    Object.entries(request.headers ?? {}).filter(([key]) => key.toLowerCase() !== name),
+  );
+  headers[name] =
     style === "bearer" ? `Bearer ${token}` : style === "basic" ? `Basic ${token}` : token;
   request.headers = headers;
 }
@@ -102,17 +105,20 @@ export async function clientCredentialsToken(config: OAuthClientConfig, scope?: 
  * Build a default 401-refresh handler for custom auth plugins that use standard OAuth
  * refresh-token rotation. This is the public boundary for plugins that do NOT use
  * defineAuth (which wires this up internally via buildOn401Handler). Returns the next
- * access token string, or null when the session cannot be refreshed.
+ * TokenInfo for the rejected session, or null when that session cannot be refreshed.
  */
-export function createOn401Hook(options: {
+export function createOAuthRefresh(options: {
   cfg: OAuthClientConfig;
   store: ConfigStore;
   namespace: string;
-}): () => Promise<string | null> {
+}): (session: OAuthSessionRef) => Promise<import("./oauth-contracts.js").TokenInfo | null> {
   const coordinator = new OAuthFlowCoordinator({
     store: options.store,
     namespace: options.namespace,
-    refresh: (refreshToken) => new OAuthClient(options.cfg).refresh(refreshToken),
+    strategy: {
+      requiresRefreshToken: true,
+      acquire: (session) => new OAuthClient(options.cfg).refresh(session.refreshToken!),
+    },
   });
-  return async () => (await coordinator.refreshStoredSession())?.access_token ?? null;
+  return coordinator.refreshSession;
 }

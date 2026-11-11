@@ -24,9 +24,8 @@
 | `createLocalState({ dir })` / `createMemoryLocalState()`                                                                                                      | app 统一的本地状态(含 `ConfigStore`)                                 |
 | `defaultProviders()` / `flagProvider` / `envProvider` / `envBearerProvider` / `fileProvider` / `oauthProvider`                                                | provider chain 的默认 provider(默认 5 个)                            |
 | `resolveWithChain(providers, pctx)`                                                                                                                           | 跑 chain 取 `TokenResult`(命中即停)                                  |
-| `resolveIdentityWithChain(providers, pctx)`                                                                                                                   | 跑 chain 取 `IdentityHint`(统一输出格式顶层 user/bot)                |
 | `injectAuthHeader(req, token, style)`                                                                                                                         | 按 authStyle(`bearer`/`x-api-key`/`basic`)注入 header                |
-| `createOn401Hook({cfg, store, namespace})`                                                                                                                    | 401 singleflight refresh 原语(由公开 `handleUnauthorized` hook 调用) |
+| `createOAuthRefresh({cfg, store, namespace})`                                                                                                                    | 401 singleflight refresh 原语(由公开 `handleUnauthorized` hook 调用) |
 | `deviceAuthorization` / `pollDeviceToken` / `getUserInfo` / `revokeToken` / `registerClient`                                                                    | OAuth 2.1 端点原语(device 设备授权 + 用户信息/吊销/注册)             |
 | 类型:`Plugin` / `CredentialsApi` / `CommandContext` / `ProviderContext` / `TokenResult` / `IdentityHint` / `ConfigStore` / `CredentialProvider` / `AuthStyle` | —                                                                    |
 
@@ -40,88 +39,64 @@
 
 ```ts
 import {
-  type Plugin,
-  type CommandContext,
-  type ProviderContext,
-  type ConfigStore,
-  defaultProviders,
-  resolveWithChain,
-  injectAuthHeader,
-  createOn401Hook,
   AuthenticationError,
+  createOAuthRefresh,
+  defaultProviders,
+  injectAuthHeader,
+  resolveWithChain,
+  type CommandContext,
+  type OAuthClientConfig,
+  type PluginFactory,
+  type TokenResult,
 } from "@renxqoo/agent-cli-sdk";
 
-export function createCrmAuth<State extends { user?: unknown }>(opts: {
+export function createCustomAuth<State>(options: {
   namespace: string;
-  authStyle?: "bearer" | "x-api-key" | "basic";
-  oauth?: { baseUrl: string; clientId: string; clientSecret: string };
-}): Plugin<State> {
-  const authStyle = opts.authStyle ?? "bearer";
-  const sessions = new WeakMap<CommandContext<State>, { token: string; refreshable: boolean }>();
-
-  // 装配期状态:apply 里从 services.localState.store 解析后填入(工厂不收目录/store 参数)。
-  let ready!: {
-    store: ConfigStore;
-    providers: ReturnType<typeof defaultProviders>;
-    on401?: () => Promise<Record<string, unknown> | null>;
-  };
-
+  oauth: OAuthClientConfig;
+}): PluginFactory<State> {
   return {
-    name: `auth:${opts.namespace}`,
-    enforce: "pre",
-
-    async apply(services) {
-      const store = services.localState.store;
-      ready = {
-        store,
-        providers: defaultProviders(),
-        on401: opts.oauth
-          ? createOn401Hook({ cfg: opts.oauth, store, namespace: opts.namespace })
-          : undefined,
+    name: `auth:${options.namespace}`,
+    async setup({ localState }) {
+      const store = localState.store;
+      const providers = defaultProviders();
+      const refresh = createOAuthRefresh({ cfg: options.oauth, store, namespace: options.namespace });
+      const sessions = new WeakMap<CommandContext<State>, TokenResult>();
+      return {
+        name: `auth:${options.namespace}`,
+        enforce: "pre",
+        async beforeCommand(ctx) {
+          const resolved = await resolveWithChain(providers, {
+            namespace: options.namespace, configStore: store, args: {}, env: process.env,
+          });
+          if (!resolved) throw new AuthenticationError({
+            subtype: "no_credentials", message: "Sign in before running this command",
+          });
+          sessions.set(ctx, resolved.token);
+        },
+        async beforeRequest(ctx, request) {
+          const prepared = { ...request, headers: { ...request.headers } };
+          const session = sessions.get(ctx);
+          if (session) injectAuthHeader(prepared, session.token, "bearer");
+          return prepared;
+        },
+        async handleUnauthorized(ctx, event) {
+          const session = sessions.get(ctx);
+          if (!session?.refreshable || !session.sessionId) return { action: "decline" };
+          const authorization = Object.entries(event.request.headers ?? {})
+            .findLast(([name]) => name.toLowerCase() === "authorization")?.[1];
+          if (!authorization?.startsWith("Bearer ")) return { action: "decline" };
+          const token = await refresh({
+            sessionId: session.sessionId,
+            token: authorization.slice("Bearer ".length),
+          });
+          if (!token) return {
+            action: "reject",
+            error: new AuthenticationError({ subtype: "token_expired", message: "Sign in again" }),
+          };
+          sessions.set(ctx, { ...session, token: token.access_token });
+          return { action: "retry" };
+        },
       };
-    },
-
-    async beforeCommand(ctx: CommandContext<State>) {
-      const { store, providers } = ready;
-      const pctx: ProviderContext = {
-        namespace: opts.namespace,
-        configStore: store,
-        args: {},
-        env: process.env,
-      };
-      const resolved = await resolveWithChain(providers, pctx); // ① provider chain 取 token
-      if (!resolved)
-        throw new AuthenticationError({
-          subtype: "no_credentials",
-          message: "未配置凭证",
-          hint: "设置 XXX_API_KEY 环境变量",
-        });
-      // ② 包装 store 成 ctx.credentials;③ 注入 scopes;④ 取 identity 填 state.user
-      // ⑤ 缓存 token 供 beforeRequest 用
-      sessions.set(ctx, {
-        token: resolved.token.token,
-        refreshable: resolved.token.refreshable === true,
-      });
-    },
-
-    async beforeRequest(ctx, req) {
-      const prepared = { ...req, headers: { ...req.headers } };
-      const session = sessions.get(ctx);
-      if (session) injectAuthHeader(prepared, session.token, authStyle);
-      return prepared;
-    },
-
-    async handleUnauthorized(ctx) {
-      const session = sessions.get(ctx);
-      if (!ready.on401 || !session?.refreshable) return { action: "decline" };
-      const token = await ready.on401();
-      if (!token)
-        return {
-          action: "reject",
-          error: new AuthenticationError({ subtype: "token_expired", message: "refresh failed" }),
-        };
-      sessions.set(ctx, { ...session, token });
-      return { action: "retry" };
     },
   };
 }
@@ -133,7 +108,7 @@ export function createCrmAuth<State extends { user?: unknown }>(opts: {
 | -------------------- | --------------------------------------------------------------------------------------- |
 | `beforeCommand`      | 跑 provider chain 取 token;包装 `store` 成 `ctx.credentials`;建立 context-keyed session |
 | `beforeRequest`      | 用 `injectAuthHeader(req, token, authStyle)` 按 authStyle 注入 header                   |
-| `handleUnauthorized` | 调 `createOn401Hook(...)`;成功后更新 session 并返回 `{ action: "retry" }`               |
+| `handleUnauthorized` | 调 `createOAuthRefresh(...)`;成功后更新 session 并返回 `{ action: "retry" }`               |
 
 **关键纪律:**
 
@@ -185,7 +160,6 @@ export interface CredentialProvider {
   name(): string; // provider 名(日志/溯源)
   priority?(): number; // 优先级,小值先试,默认 10
   resolveToken(pctx: ProviderContext): Promise<TokenResult | null>; // null = 没有,chain 继续
-  resolveIdentity?(pctx: ProviderContext): Promise<IdentityHint | null>;
 }
 
 export interface ProviderContext {
@@ -201,7 +175,10 @@ export interface TokenResult {
   scopes?: string[];
   source: string; // 来源描述(如 'env:ORDERS_API_KEY')
   expiresAt?: number; // 过期时间戳(ms)
-  refreshToken?: string; // OAuth 的刷新 token
+  refreshToken?: string; // OAuth refresh token
+  refreshable?: boolean;
+  sessionId?: string;
+  identity?: IdentityHint | null;
 }
 ```
 
@@ -265,7 +242,7 @@ defineCli({ plugins: [auth, signPlugin], ... })
 | **认证**(取 token、注入 header、填 user)         | `defineAuth`；特殊协议使用 provider chain | 把返回的 Plugin 放进 `plugins` |
 | **非认证横切**(固定参数、签名、格式、错误、审计) | 普通插件钩子                              | 直接写 Plugin 对象塞 plugins   |
 
-**provider chain 由 agent-cli-sdk 的 `resolveWithChain`/`resolveIdentityWithChain` 提供**,业务包不直接调 `credentials.register()`(已取消)。认证全部走自写的 auth Plugin(它调 provider chain),非认证横切用普通插件,不走 provider chain。
+**provider chain 由 agent-cli-sdk 的 `resolveWithChain` 提供**,业务包不直接调 `credentials.register()`(已取消)。认证全部走自写的 auth Plugin(它调 provider chain),非认证横切用普通插件,不走 provider chain。
 
 ---
 
@@ -290,9 +267,9 @@ app 通过 `defineCliApp({ dir })` 只决定一次根目录。装配器创建唯
 > **安全契约**:
 > - 凭证与配置以**明文 at-rest** 存储,仅依赖文件系统权限保护(不做混淆/加密)。如需 at-rest 加密,请在 OS keychain 等外部保管。
 > - `0600`(文件)/ `0700`(目录)仅在 **POSIX** 生效;Windows 不支持 chmod,文件 ACL 继承父目录。
-> - 存储目录由业务 app 通过 `defineCliApp({ dir })` 显式决定一次;`defineAuth`、`createUpdateNotifier`、`defineInstaller` 经 `apply(services)` 收到同一个 localState。agent-cli-sdk **不内置默认目录**,高层 API 一律不接收目录参数。
+> - 存储目录由业务 app 通过 `defineCliApp({ dir })` 显式决定一次;`defineAuth`、`createUpdateNotifier`、`defineInstaller` 经 `setup(services)` 收到同一个 localState。agent-cli-sdk **不内置默认目录**,高层 API 一律不接收目录参数。
 > - 凭证/配置文件读取走与命令输入相同的**严格有界解析器**(拒绝重复键、unsafe 键,限制深度/大小)。
-> - OAuth refresh 的「读 → 换 token → 写」事务由**跨进程文件锁**保护(`ConfigStore.withLock`),避免并发 CLI 互相覆盖丢失更新。
+> - OAuth refresh 的「读 → 换 token → 写」事务由**跨进程文件锁**保护(`ConfigStore.transactCredentials`),避免并发 CLI 互相覆盖丢失更新。
 
 ### 凭证文件结构
 
@@ -343,7 +320,7 @@ export interface ConfigStore {
   clearCredentials(namespace: string): Promise<void>;
   loadConfig(namespace: string): Promise<Record<string, unknown>>; // <dir>/config/<ns>.json,不存在 = {}
   saveConfig(namespace: string, data: Record<string, unknown>): Promise<void>; // 整体替换,权限 0600
-  withLock<T>(namespace: string, fn: () => Promise<T>): Promise<T>; // 凭证读-改-写事务锁
+  transactCredentials<T>(namespace: string, operation: (transaction: CredentialTransaction) => Promise<T>): Promise<T>; // 凭证读-改-写事务锁
 }
 ```
 
@@ -410,7 +387,7 @@ $ rxcli-orders list --verbose 2>&1 | grep -i auth
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `loadCredentials()` 读固定文件 | `ctx.credentials.get(namespace)` 按命名空间读(走 provider chain)                                                                                           |
 | 固定优先级链                   | `resolveWithChain` + `defaultProviders()`(默认 5 个 provider)                                                                                              |
-| OAuth token 续期硬编码         | 401 检测 + singleflight 复用在框架**请求层**;refresh 执行能力由 auth Plugin 的 `createOn401Hook` 提供。两者协作(详见 `04-errors.md` 的"关于 401 自动续期") |
+| OAuth token 续期硬编码         | 401 检测 + singleflight 复用在框架**请求层**;refresh 执行能力由 auth Plugin 的 `createOAuthRefresh` 提供。两者协作(详见 `04-errors.md` 的"关于 401 自动续期") |
 | 单一中间层 baseUrl             | 业务包各自声明 baseUrl(defineCli 配置),ConfigStore 只管凭证                                                                                                |
 | 固定认证实现                   | `defineAuth` 覆盖标准场景；特殊协议通过公开 Plugin 与基础块扩展                                                                                            |
 

@@ -1,5 +1,5 @@
 /**
- * defineCliApp 装配器测试:services 注入、apply 顺序与失败语义、
+ * defineCliApp 装配器测试:services 注入、setup 顺序与失败语义、
  * dir/localState 二选一、defineAuth/defineInstaller 经装配后的路由可达性,
  * 以及 app 级生命周期钩子(onAppRun/afterAppRun)。
  */
@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineAuth, defineCliApp, defineCommand, defineInstaller } from "../index.js";
 import { createMemoryLocalState } from "../local-state.js";
-import type { AppServices, Plugin } from "../types.js";
+import type { AppServices, Plugin, PluginFactory } from "../types.js";
 
 const roots: string[] = [];
 let stdout = "";
@@ -56,22 +56,24 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 describe("defineCliApp: 装配器", () => {
-  it("按注册序 apply 插件,services 携带 appName/binName/同一 localState", async () => {
+  it("按注册序 setup 插件,services 携带 appName/binName/同一 localState", async () => {
     const order: string[] = [];
     const services: AppServices[] = [];
     const localState = createMemoryLocalState();
-    const p1: Plugin = {
+    const p1: PluginFactory = {
       name: "p1",
-      async apply(servicesArg) {
+      async setup(servicesArg) {
         order.push("p1");
         services.push(servicesArg);
+        return { name: servicesArg.appName };
       },
     };
-    const p2: Plugin = {
+    const p2: PluginFactory = {
       name: "p2",
-      async apply(servicesArg) {
+      async setup(servicesArg) {
         order.push("p2");
         services.push(servicesArg);
+        return { name: servicesArg.appName };
       },
     };
 
@@ -95,10 +97,11 @@ describe("defineCliApp: 装配器", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-cli-app-"));
     roots.push(root);
     const seen: unknown[] = [];
-    const probe: Plugin = {
+    const probe: PluginFactory = {
       name: "probe",
-      async apply(servicesArg) {
+      async setup(servicesArg) {
         seen.push(servicesArg.localState.kind);
+        return { name: "probe" };
       },
     };
 
@@ -113,10 +116,10 @@ describe("defineCliApp: 装配器", () => {
     expect(seen).toEqual(["file"]);
   });
 
-  it("任一插件 apply 失败 → defineCliApp reject(启动失败,不静默降级)", async () => {
-    const broken: Plugin = {
+  it("任一插件 setup 失败 → defineCliApp reject(启动失败,不静默降级)", async () => {
+    const broken: PluginFactory = {
       name: "broken",
-      async apply() {
+      async setup() {
         throw new Error("assembly failed");
       },
     };
@@ -131,7 +134,7 @@ describe("defineCliApp: 装配器", () => {
     ).rejects.toThrow("assembly failed");
   });
 
-  it("defineAuth 经装配后 auth 命令可路由(apply 填充 provides)", async () => {
+  it("defineAuth 经装配后 auth 命令可路由(setup 填充 provides)", async () => {
     const app = await defineCliApp({
       localState: createMemoryLocalState(),
       name: "demo",
@@ -142,7 +145,7 @@ describe("defineCliApp: 装配器", () => {
     });
 
     // 未登录 → auth status 命中路由并返回 { loggedIn: false }(exit 0),
-    // 而非 unknown command(exit 2)—— 证明 apply 已填充 provides
+    // 而非 unknown command(exit 2)—— 证明 setup 已填充 provides
     await app.run(["auth", "status"]);
     expect(process.exitCode).toBe(0);
     expect(JSON.parse(stdout).data.loggedIn).toBe(false);

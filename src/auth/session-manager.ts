@@ -3,6 +3,7 @@ import type {
   CredentialsApi,
   RequestOptions,
   UnauthorizedDecision,
+  RequestAttemptEvent,
 } from "../types.js";
 import type {
   ConfigStore,
@@ -10,6 +11,7 @@ import type {
   IdentityHint,
   ProviderContext,
   TokenResult,
+  OAuthSessionRef,
 } from "../credentials/index.js";
 import { resolveWithChain } from "../credentials/index.js";
 import { AuthenticationError } from "../errs/index.js";
@@ -27,7 +29,7 @@ export interface AuthSessionManagerOptions {
   commandNamespace: string;
   store: ConfigStore;
   providers: CredentialProvider[];
-  refresh: () => Promise<TokenInfo | null>;
+  refresh: (session: OAuthSessionRef) => Promise<TokenInfo | null>;
 }
 
 /** Owns provider resolution, per-command auth state, identity, injection and refresh. */
@@ -53,9 +55,7 @@ export class AuthSessionManager {
       });
     }
 
-    const identity = resolved.provider.resolveIdentity
-      ? ((await resolved.provider.resolveIdentity(providerContext)) ?? undefined)
-      : undefined;
+    const identity = resolved.token.identity ?? undefined;
     this.#sessions.set(ctx, { token: resolved.token, identity });
     (ctx as CommandContext<State> & { [identityKey]?: IdentityHint })[identityKey] = identity;
     (ctx as { credentials: CredentialsApi }).credentials = this.#credentialsApi();
@@ -80,11 +80,21 @@ export class AuthSessionManager {
     return request;
   }
 
-  async handleUnauthorized<State>(ctx: CommandContext<State>): Promise<UnauthorizedDecision> {
+  async handleUnauthorized<State>(
+    ctx: CommandContext<State>,
+    event: Readonly<RequestAttemptEvent>,
+  ): Promise<UnauthorizedDecision> {
     const session = this.#sessions.get(ctx);
-    if (!session?.token.refreshable) return { action: "decline" };
+    if (!session?.token.refreshable || !session.token.sessionId) return { action: "decline" };
 
-    const refreshed = await this.#options.refresh();
+    const authorization = Object.entries(event.request.headers ?? {}).findLast(
+      ([key]) => key.toLowerCase() === "authorization",
+    )?.[1];
+    if (!authorization?.startsWith("Bearer ")) return { action: "decline" };
+    const refreshed = await this.#options.refresh({
+      sessionId: session.token.sessionId,
+      token: authorization.slice("Bearer ".length),
+    });
     if (!refreshed) {
       return {
         action: "reject",

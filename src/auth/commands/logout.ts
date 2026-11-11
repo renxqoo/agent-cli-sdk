@@ -22,7 +22,11 @@ export function createLogoutCommand(deps: LogoutCommandDeps): CommandSpec {
     name: "logout",
     description: "Log out (revoke session + clear local credentials)",
     async run(ctx): Promise<CommandResult> {
-      const creds = (await store.loadCredentials(credNs)) as Partial<StoredOAuthCredentials> | null;
+      const creds = await store.transactCredentials(credNs, async (transaction) => {
+        const current = transaction.read() as Partial<StoredOAuthCredentials> | null;
+        transaction.clear();
+        return current;
+      });
       // B6: revoke the long-lived refresh token as well as the access token, so the
       // session is invalidated server-side, not merely cleared locally.
       if (creds?.token) {
@@ -39,7 +43,6 @@ export function createLogoutCommand(deps: LogoutCommandDeps): CommandSpec {
           /* best-effort: refresh token revocation is optional per RFC 7009 */
         }
       }
-      await store.clearCredentials(credNs);
       ctx.log.info("Logged out.");
       return { data: { loggedOut: true } };
     },

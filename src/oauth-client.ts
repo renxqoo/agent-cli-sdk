@@ -33,7 +33,8 @@ export class OAuthClient {
         ? { verification_uri_complete: value.verification_uri_complete }
         : {}),
       expires_in: numberField(value, "expires_in", "device_authorization"),
-      interval: numberField(value, "interval", "device_authorization"),
+      interval:
+        value.interval === undefined ? 5 : numberField(value, "interval", "device_authorization"),
     };
   }
 
@@ -67,6 +68,18 @@ export class OAuthClient {
     const response = await this.request("/token", this.formRequest(form, true));
     const body = await decodeJson(response);
     if (!response.ok) {
+      if (response.status === 429 || response.status >= 500) {
+        throw new APIError({
+          subtype: response.status === 429 ? "rate_limited" : "server_error",
+          code: response.status,
+          message: "OAuth token endpoint is temporarily unavailable",
+          retryable: true,
+          cause: body,
+        });
+      }
+      if ((body as { error?: unknown } | undefined)?.error !== "invalid_grant") {
+        throw apiFailure(response, "OAuth refresh failed", body);
+      }
       throw new AuthenticationError({
         subtype: "token_expired",
         message: "Refresh token is invalid, please log in again",

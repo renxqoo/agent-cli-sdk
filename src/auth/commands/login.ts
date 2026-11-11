@@ -12,6 +12,7 @@ import type { ConfigStore, StoredOAuthCredentials } from "../../credentials/type
 import { getUserInfo, type OAuthClientConfig, type TokenInfo } from "../../oauth.js";
 import type { AuthFlow, FlowType, FlowDeps } from "../../flows/types.js";
 import { SplitFlowSignal } from "../../flows/device.js";
+import { randomUUID } from "node:crypto";
 
 export interface LoginCommandDeps {
   oauth: OAuthClientConfig;
@@ -33,6 +34,7 @@ export async function persistCredentials(
   log?: { info(...args: unknown[]): void },
 ): Promise<{ loggedIn: boolean; user?: { id: string; name: string } }> {
   const creds: StoredOAuthCredentials = {
+    sessionId: randomUUID(),
     token: token.access_token,
     refreshToken: token.refresh_token ?? "",
     ...(typeof token.expires_in === "number"
@@ -48,19 +50,17 @@ export async function persistCredentials(
     try {
       const user = await getUserInfo(oauth, token.access_token);
       creds.user = { userId: user.open_id, name: user.name };
-      await store.saveCredentials(namespace, creds as unknown as Record<string, unknown>);
-      log?.info(`\n✓ Login successful: ${user.name} (${user.open_id})`);
-      return { loggedIn: true, user: { id: user.open_id, name: user.name } };
     } catch {
-      await store.saveCredentials(namespace, creds as unknown as Record<string, unknown>);
-      log?.info("\n✓ Login successful (could not fetch user info)");
-      return { loggedIn: true };
+      log?.info("\nCould not fetch user info");
     }
   }
 
   await store.saveCredentials(namespace, creds as unknown as Record<string, unknown>);
-  log?.info("\n✓ Login successful (client credentials)");
-  return { loggedIn: true };
+  log?.info("\n✓ Login successful");
+  return {
+    loggedIn: true,
+    ...(creds.user ? { user: { id: creds.user.userId, name: creds.user.name } } : {}),
+  };
 }
 
 export function createLoginCommand(deps: LoginCommandDeps): CommandSpec<any> {

@@ -3,6 +3,7 @@ import {
   createMemoryLocalState,
   createUpdateNotifier,
   defineAuth,
+  defineCli,
   defineCliApp,
   defineInstaller,
 } from "../src/index.js";
@@ -41,7 +42,7 @@ void defineAuth({
 void defineAuth({
   credentialNamespace: "legacy",
   baseUrl: "https://auth.example.test",
-  // @ts-expect-error localState is injected via apply(services), not a factory option.
+  // @ts-expect-error localState is injected via setup(services), not a factory option.
   localState: createLocalState({ dir: "/tmp/x" }),
 });
 
@@ -76,7 +77,7 @@ createUpdateNotifier({
 createUpdateNotifier({
   packageName: "legacy",
   currentVersion: "1.0.0",
-  // @ts-expect-error localState is injected via apply(services).
+  // @ts-expect-error localState is injected via setup(services).
   localState: createLocalState({ dir: "/tmp/x" }),
 });
 
@@ -101,5 +102,33 @@ void defineCliApp({
   localState: createMemoryLocalState(),
   name: "x",
   description: "x",
+  commands: {},
+});
+
+// Factory definitions are bound before entering the synchronous runtime.
+const authDefinition = defineAuth({
+  credentialNamespace: "current",
+  baseUrl: "https://auth.example.test",
+});
+const authRuntime = await authDefinition.setup({
+  appName: "current",
+  localState: createMemoryLocalState(),
+});
+void defineCli({
+  name: "current",
+  description: "current",
+  // @ts-expect-error Synchronous applications accept assembled runtime plugins.
+  plugins: [authDefinition],
+  commands: {},
+});
+// @ts-expect-error Credential changes use transactCredentials.
+store.withLock("crm", async () => {});
+// @ts-expect-error Definitions expose setup and return a runtime.
+authDefinition.apply({});
+void defineCliApp({
+  localState: createMemoryLocalState(),
+  name: "current",
+  description: "current",
+  plugins: [authDefinition, authRuntime],
   commands: {},
 });

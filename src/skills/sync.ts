@@ -15,19 +15,19 @@
 import { basename, dirname, join, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
-  realpathSync,
   readdirSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { listSkills } from "./reader.js";
-import { ConflictError } from "../errs/index.js";
+import { readSkillTree, writeSkillTree, type SkillTree } from "./files.js";
+import { assertExistingPathInside, validateSkillName } from "./path-guard.js";
+import { isAbsolute } from "node:path";
+import { ConfigError } from "../errs/index.js";
 import { withFileLockSync } from "../infra/file-lock.js";
 import {
   resolveSkillTargets,
@@ -59,11 +59,6 @@ export interface SyncSkillsOptions {
   targets?: SkillTarget[];
   /** 对 targets 也走探测(只写父目录已存在的);默认 false(targets 强制全写)。 */
   detect?: boolean;
-  /**
-   * 跨进程锁的陈旧回收阈值(ms):一个被信号中断的 sync 留下的锁,超过该时长且属主进程
-   * 已死时,下次 sync 直接回收。默认 5 分钟。调大可容忍更长的 sync,调小可更快恢复。
-   */
-  lockStaleAfterMs?: number;
 }
 
 /**
@@ -95,56 +90,17 @@ const NODE_DIRECTORY_OPERATIONS: DirectoryTransactionOperations = {
   id: randomUUID,
 };
 
-/**
- * Recursive copy that dereferences every symlink into a real file/dir. Broken
- * symlinks are skipped; symlink cycles (a link resolving to an ancestor) are
- * broken via a realpath-seen guard so the copy cannot recurse forever.
- */
 function copyTreeDereferenced(source: string, destination: string): void {
-  const seen = new Set<string>();
-  const copy = (src: string, dest: string): void => {
-    mkdirSync(dest, { recursive: true });
-    for (const entry of readdirSync(src, { withFileTypes: true })) {
-      const srcPath = join(src, entry.name);
-      const destPath = join(dest, entry.name);
-      if (entry.isSymbolicLink()) {
-        let real;
-        try {
-          real = statSync(srcPath); // follows the link
-        } catch {
-          continue; // broken symlink — skip
-        }
-        if (real.isDirectory()) {
-          let resolved: string | undefined;
-          try {
-            resolved = realpathSync(srcPath);
-          } catch {
-            resolved = undefined;
-          }
-          // B2: break symlink cycles — skip a link whose target we already copied.
-          if (!resolved || seen.has(resolved)) continue;
-          seen.add(resolved);
-          copy(srcPath, destPath);
-        } else {
-          copyFileSync(srcPath, destPath); // follows the link, copies target content
-        }
-      } else if (entry.isDirectory()) {
-        copy(srcPath, destPath);
-      } else {
-        copyFileSync(srcPath, destPath);
-      }
-    }
-  };
-  copy(source, destination);
+  writeSkillTree(readSkillTree(source), destination);
 }
 
 /** Crash-recoverable directory swap. A failed activation restores the previous destination. */
 export function replaceDirectoryTransaction(
-  src: string,
+  src: string | SkillTree,
   dest: string,
   operations: DirectoryTransactionOperations = NODE_DIRECTORY_OPERATIONS,
 ): void {
-  if (!operations.exists(src)) {
+  if (typeof src === "string" && !operations.exists(src)) {
     removeDirectoryTransaction(dest, operations);
     return;
   }
@@ -157,7 +113,8 @@ export function replaceDirectoryTransaction(
   const backup = join(parent, `.${basename(dest)}.${transaction}.backup`);
   let movedPrevious = false;
   try {
-    operations.copy(src, temp);
+    if (typeof src === "string") operations.copy(src, temp);
+    else writeSkillTree(src, temp);
     if (operations.exists(dest)) {
       operations.rename(dest, backup);
       movedPrevious = true;
@@ -217,97 +174,149 @@ function recoverInterruptedSwap(
  *
  * 这是原 syncSkills 的核心逻辑,抽出来供多 target 循环复用。
  */
-function syncOne(skillsRoot: string, destDir: string, lockStaleAfterMs?: number): void {
+function syncOne(
+  skillsRoot: string,
+  destDir: string,
+  snapshots: ReadonlyMap<string, SkillTree>,
+): void {
   mkdirSync(destDir, { recursive: true });
-  withSyncLock(destDir, () => syncOneLocked(skillsRoot, destDir), lockStaleAfterMs);
+  withSyncLock(destDir, () => syncOneLocked(skillsRoot, destDir, snapshots));
 }
 
-function syncOneLocked(skillsRoot: string, destDir: string): void {
-  const skills = listSkills(skillsRoot);
-  const sourceNames = new Set(skills.map((s) => s.name));
+function syncOneLocked(
+  skillsRoot: string,
+  destDir: string,
+  snapshots: ReadonlyMap<string, SkillTree>,
+): void {
+  const sourceNames = new Set(snapshots.keys());
+  const sourceId = createHash("sha256").update(resolve(skillsRoot)).digest("hex");
+  const operations = indexedDirectoryOperations(copyTreeDereferenced);
 
   // 共享目标目录按 source 分别记账。只删除"这个 source 上次同步、这次已删除"的条目,
   // 绝不扫描并删除其他业务包/用户安装的 skill。
   const manifestsDir = join(destDir, ".rxcli-sync-manifests");
   mkdirSync(manifestsDir, { recursive: true });
-  const sourceId = createHash("sha256").update(resolve(skillsRoot)).digest("hex");
+  assertExistingPathInside(destDir, manifestsDir, "Skill manifests");
   const manifestPath = join(manifestsDir, `${sourceId}.json`);
   recoverFileTransaction(manifestPath);
-  let previousNames: string[] = [];
-  if (existsSync(manifestPath)) {
-    try {
-      const parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as { skills?: unknown };
-      if (Array.isArray(parsed.skills)) {
-        previousNames = parsed.skills.filter((name): name is string => typeof name === "string");
+  const previousManifest = existsSync(manifestPath) ? readManifest(manifestPath) : undefined;
+  const previousNames = previousManifest?.skills ?? [];
+  const otherOwners = new Map<string, string>();
+  for (const file of readdirSync(manifestsDir)) {
+    if (join(manifestsDir, file) === manifestPath || !/^[a-f0-9]{64}\.json$/.test(file)) continue;
+    const manifest = readManifest(join(manifestsDir, file));
+    for (const name of manifest.skills) {
+      const source = join(manifest.source, name);
+      if (existsSync(join(source, "SKILL.md"))) {
+        assertExistingPathInside(manifest.source, source, "Skill owner source");
+        otherOwners.set(name, manifest.source);
       }
-    } catch {
-      previousNames = [];
     }
   }
-
-  const findOtherOwner = (name: string): string | undefined => {
-    for (const file of readdirSync(manifestsDir)) {
-      if (join(manifestsDir, file) === manifestPath || !file.endsWith(".json")) continue;
-      try {
-        const manifest = JSON.parse(readFileSync(join(manifestsDir, file), "utf8")) as {
-          source?: unknown;
-          skills?: unknown;
-        };
-        if (
-          typeof manifest.source === "string" &&
-          Array.isArray(manifest.skills) &&
-          manifest.skills.includes(name) &&
-          existsSync(join(manifest.source, name, "SKILL.md"))
-        ) {
-          return manifest.source;
-        }
-      } catch {
-        // 损坏/并发中的其他 manifest 不影响当前 source 同步。
-      }
-    }
-    return undefined;
-  };
 
   for (const previous of previousNames) {
     if (!sourceNames.has(previous)) {
       const target = join(destDir, previous);
-      const otherSource = findOtherOwner(previous);
+      const otherSource = otherOwners.get(previous);
       if (otherSource) {
         // 原子替换:另一 owner 源拷贝失败时,保留 dest 原内容(BUG-1)。
-        replaceDirectoryTransaction(join(otherSource, previous), target);
+        replaceDirectoryTransaction(join(otherSource, previous), target, operations);
       } else {
         // 无其它 owner:明确清理 dest(源端已删,该 skill 应被移除)。
-        removeDirectoryTransaction(target);
+        removeDirectoryTransaction(target, operations);
       }
     }
   }
 
-  for (const s of skills) {
-    const target = join(destDir, s.name);
-    // 原子替换:拷贝失败时 dest 保留旧版本(BUG-1)。
-    replaceDirectoryTransaction(join(skillsRoot, s.name), target);
+  for (const [name, tree] of snapshots) {
+    const target = join(destDir, name);
+    recoverInterruptedSwap(target, operations);
+    let unchanged = false;
+    if (previousManifest?.digests?.[name] === tree.digest && existsSync(target)) {
+      try {
+        unchanged = readSkillTree(target, destDir).digest === tree.digest;
+      } catch {
+        unchanged = false;
+      }
+    }
+    if (!unchanged) replaceDirectoryTransaction(tree, target, operations);
   }
   writeFileTransaction(
     manifestPath,
-    JSON.stringify({ source: resolve(skillsRoot), skills: [...sourceNames].sort() }, null, 2) +
-      "\n",
+    JSON.stringify(
+      {
+        source: resolve(skillsRoot),
+        skills: [...sourceNames].toSorted(),
+        digests: Object.fromEntries([...snapshots].map(([name, tree]) => [name, tree.digest])),
+      },
+      null,
+      2,
+    ) + "\n",
   );
 }
 
-function withSyncLock<T>(destDir: string, operation: () => T, lockStaleAfterMs?: number): T {
-  // B1: cross-process O_EXCL lockfile with stale-PID + TTL recovery. A sync killed by
-  // a signal (Ctrl+C / SIGTERM) leaves the lock behind; the next run reclaims it once
-  // the recorded PID is dead or the TTL elapses.
-  try {
-    return withFileLockSync(destDir, "sync", operation, {
-      staleAfterMs: lockStaleAfterMs ?? 5 * 60_000,
-    });
-  } catch (error) {
-    if (error instanceof ConflictError) {
-      throw new ConflictError(`skill sync already in progress for ${destDir}`);
-    }
-    throw error;
+function withSyncLock<T>(destDir: string, operation: () => T): T {
+  return withFileLockSync(destDir, "sync", operation);
+}
+
+interface SyncManifest {
+  source: string;
+  skills: string[];
+  digests?: Record<string, string>;
+}
+
+function readManifest(path: string): SyncManifest {
+  assertExistingPathInside(dirname(path), path, "Skill manifest");
+  const value = JSON.parse(readFileSync(path, "utf8")) as SyncManifest;
+  if (
+    !value ||
+    typeof value.source !== "string" ||
+    !isAbsolute(value.source) ||
+    !Array.isArray(value.skills)
+  ) {
+    throw new ConfigError({ subtype: "invalid_config", message: "Invalid skill sync manifest" });
   }
+  const expectedName = createHash("sha256").update(resolve(value.source)).digest("hex") + ".json";
+  if (basename(path) !== expectedName)
+    throw new ConfigError({
+      subtype: "invalid_config",
+      message: "Skill manifest source does not match its identity",
+    });
+  for (const name of value.skills) {
+    if (typeof name !== "string")
+      throw new ConfigError({ subtype: "invalid_config", message: "Invalid skill manifest name" });
+    validateSkillName(name);
+  }
+  return value;
+}
+
+/** Recovery queries reuse a single directory inventory while swaps update the index. */
+function indexedDirectoryOperations(
+  copy: DirectoryTransactionOperations["copy"],
+): DirectoryTransactionOperations {
+  const listings = new Map<string, Set<string>>();
+  const list = (path: string): Set<string> => {
+    let entries = listings.get(path);
+    if (!entries) {
+      entries = new Set(readdirSync(path));
+      listings.set(path, entries);
+    }
+    return entries;
+  };
+  return {
+    ...NODE_DIRECTORY_OPERATIONS,
+    copy,
+    list: (path) => [...list(path)],
+    rename(source, destination) {
+      renameSync(source, destination);
+      listings.get(dirname(source))?.delete(basename(source));
+      listings.get(dirname(destination))?.add(basename(destination));
+    },
+    remove(path) {
+      rmSync(path, { recursive: true, force: true });
+      listings.get(dirname(path))?.delete(basename(path));
+    },
+  };
 }
 
 function writeFileTransaction(path: string, content: string): void {
@@ -385,13 +394,26 @@ export function syncSkills(skillsRoot: string, options?: SyncSkillsOptions): Syn
     candidates.filter((c) => !activeTargets.some((a) => a.key === c.key)).map((c) => c.key),
   );
 
-  const count = listSkills(skillsRoot).length;
+  const skills = listSkills(skillsRoot);
+  const count = skills.length;
+  const snapshots = new Map<string, SkillTree>();
+  let sourceError: unknown;
+  try {
+    for (const skill of skills) {
+      const source = join(skillsRoot, skill.name);
+      assertExistingPathInside(skillsRoot, source, "Skill source");
+      snapshots.set(skill.name, readSkillTree(source));
+    }
+  } catch (error) {
+    sourceError = error;
+  }
   const results: SyncTargetResult[] = [];
 
   for (const t of activeTargets) {
     const expanded = expandTargetDir(t.dir);
     try {
-      syncOne(skillsRoot, expanded, options?.lockStaleAfterMs);
+      if (sourceError) throw sourceError;
+      syncOne(skillsRoot, expanded, snapshots);
       results.push({ key: t.key, dir: expanded, ok: true });
     } catch (err) {
       // 单个 target 失败(权限/磁盘/路径非法)不中断其余 target。

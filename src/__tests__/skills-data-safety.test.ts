@@ -19,6 +19,7 @@ import {
   readdirSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
+import { withFileLockSync } from "../infra/file-lock.js";
 import { join } from "node:path";
 import {
   replaceDirectoryTransaction,
@@ -84,12 +85,12 @@ describe("BUG-1: sync 拷贝失败不丢数据(原子替换,先拷成功再换)"
 
   it("refuses a concurrent sync while the target lock is held", () => {
     makeSkill(tmpRoot, "alpha");
-    mkdirSync(join(tmpDest, ".rxcli-sync.lock"));
-
-    const result = syncSkills(tmpRoot, { targets: [{ key: "test", dir: tmpDest }] });
+    const result = withFileLockSync(tmpDest, "sync", () =>
+      syncSkills(tmpRoot, { targets: [{ key: "test", dir: tmpDest }] }),
+    );
 
     expect(result.targets[0]).toMatchObject({ ok: false });
-    expect(result.targets[0]?.error).toContain("already in progress");
+    expect(result.targets[0]?.error).toContain("held by another process");
     expect(existsSync(join(tmpDest, "alpha"))).toBe(false);
   });
   it("主循环:目标已有 skill + 源端更新 + 拷贝中途失败 → 目标原内容应保留", () => {

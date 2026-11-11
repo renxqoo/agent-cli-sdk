@@ -73,13 +73,13 @@ describe("auth runtime isolation", () => {
       });
     });
 
-    const auth = defineAuth({
+    const authDefinition = defineAuth({
       credentialNamespace: "demo",
       baseUrl: "https://auth.example",
       clientId: "id",
       clientSecret: "secret",
     });
-    await auth.apply?.({ localState, appName: "demo" });
+    const auth = await authDefinition.setup({ localState, appName: "demo" });
     const app = defineCli({
       name: "demo",
       description: "demo",
@@ -111,14 +111,17 @@ describe("auth runtime isolation", () => {
           : null;
       },
     };
-    const auth = defineAuth({
+    const authDefinition = defineAuth({
       credentialNamespace: "demo",
       baseUrl: "https://auth.example",
       clientId: "id",
       clientSecret: "secret",
       providers: [provider],
     });
-    await auth.apply?.({ localState: createMemoryLocalState(), appName: "demo" });
+    const auth = await authDefinition.setup({
+      localState: createMemoryLocalState(),
+      appName: "demo",
+    });
 
     let arrived = 0;
     let release!: () => void;

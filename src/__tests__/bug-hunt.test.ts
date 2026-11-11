@@ -41,20 +41,6 @@ describe("BUG-SDK-1: meta.pagination: null 不应崩溃", () => {
 });
 
 // ============================================================================
-// BUG-SDK-2 [P1]: enforce 类型只有 "pre"|"post",但实现支持三档("normal")
-// 根因: types.ts:197 enforce?: "pre" | "post"(缺 normal),plugin.ts:21 定义了三档
-// 期望: enforce 类型应包含 "normal"
-// ============================================================================
-describe("BUG-SDK-2: enforce 类型应支持 normal 档", () => {
-  it("enforce: 'normal' 应是合法类型值", async () => {
-    // 类型层面验证(运行时 normal 已被 sortPlugins 支持)
-    const plugin = { name: "test", enforce: "normal" as const, async beforeCommand() {} };
-    // 当前:TS 编译报错 "normal" 不在 "pre"|"post" 里;运行时正常
-    expect(plugin.enforce).toBe("normal");
-  });
-});
-
-// ============================================================================
 // BUG-SDK-3 [中]: 单短横 flag(如 -x)被静默当 positional,不拒绝
 // 根因: define.ts parseFlags 只识别 -- 开头的 token,-x 落入 positional
 // 期望: -x 这种非 -h/-v 的单短横 token 应抛 validation(未知 flag),而非塞进 positional

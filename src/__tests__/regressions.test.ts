@@ -125,11 +125,14 @@ describe("defineCli: plugin lifecycle boundaries", () => {
   });
 
   it("passes the reserved --api-key flag to the auth provider chain", async () => {
-    const auth = defineAuth({
+    const authDefinition = defineAuth({
       credentialNamespace: "crm",
       baseUrl: "https://example.test",
     });
-    await auth.apply?.({ localState: createMemoryLocalState(), appName: "crm" });
+    const auth = await authDefinition.setup({
+      localState: createMemoryLocalState(),
+      appName: "crm",
+    });
     const app = defineCli({
       name: "crm",
       description: "crm",
@@ -190,11 +193,14 @@ describe("defineCli: plugin lifecycle boundaries", () => {
         ),
       ),
     );
-    const auth = defineAuth({
+    const authDefinition = defineAuth({
       credentialNamespace: "crm",
       baseUrl: "https://auth.test",
     });
-    await auth.apply?.({ localState: createMemoryLocalState(), appName: "crm" });
+    const auth = await authDefinition.setup({
+      localState: createMemoryLocalState(),
+      appName: "crm",
+    });
     const app = defineCli({
       name: "crm",
       description: "crm",

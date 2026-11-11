@@ -28,12 +28,17 @@ export interface ConfigStore {
   loadConfig(namespace: string): Promise<Record<string, unknown>>;
   /** 写命名空间的配置文件(整体替换,权限 0600)。 */
   saveConfig(namespace: string, data: Record<string, unknown>): Promise<void>;
-  /**
-   * 在持有命名空间独占锁的情况下执行 `fn`。保护凭证的读-改-写事务
-   * (如 OAuth refresh),避免跨进程并发互相覆盖丢失更新。
-   * fileStore 用进程间文件锁实现,memoryStore 用进程内互斥。
-   */
-  withLock<T>(namespace: string, fn: () => Promise<T>): Promise<T>;
+  /** All credential mutations share this namespace-exclusive transaction boundary. */
+  transactCredentials<T>(
+    namespace: string,
+    operation: (transaction: CredentialTransaction) => Promise<T>,
+  ): Promise<T>;
+}
+
+export interface CredentialTransaction {
+  read(): Record<string, unknown> | null;
+  write(data: Record<string, unknown>): void;
+  clear(): void;
 }
 
 // ============================================================================
@@ -52,6 +57,10 @@ export interface TokenResult {
   refreshToken?: string;
   /** 401 时是否允许 auth plugin 使用其 refresh 策略切换 token。默认 false。 */
   refreshable?: boolean;
+  /** Persisted OAuth session identity, stable across access-token refreshes. */
+  sessionId?: string;
+  /** Identity resolved from the same snapshot as the token. */
+  identity?: IdentityHint | null;
 }
 
 export interface IdentityHint {
@@ -59,6 +68,11 @@ export interface IdentityHint {
   identity: "user" | "bot";
   userId?: string;
   name?: string;
+}
+
+export interface OAuthSessionRef {
+  sessionId: string;
+  token: string;
 }
 
 // ============================================================================
@@ -87,8 +101,6 @@ export interface CredentialProvider {
   priority?(): number;
   /** null = 没有,chain 继续;非 null = 命中,用它的 token。 */
   resolveToken(pctx: ProviderContext): Promise<TokenResult | null>;
-  /** 可选:推断 identity(user/bot)填统一输出格式顶层。 */
-  resolveIdentity?(pctx: ProviderContext): Promise<IdentityHint | null>;
 }
 
 // ============================================================================
@@ -97,6 +109,7 @@ export interface CredentialProvider {
 
 /** OAuth 场景存盘的凭证形态(对齐 v1 StoredCredentials,字段转 camelCase)。 */
 export interface StoredOAuthCredentials {
+  sessionId?: string;
   token: string;
   refreshToken: string;
   /** Expiry ms epoch; undefined when the server omitted expires_in (RFC 6749 optional). */

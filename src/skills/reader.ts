@@ -64,6 +64,7 @@ export function listSkills(skillsRoot: string): SkillInfo[] {
     // L7: a single unreadable/escaping SKILL.md must not abort discovery of every
     // other skill — the BUG-3 resilience contract. Wrap the whole per-entry body.
     try {
+      validateSkillName(e);
       assertExistingPathInside(skillsRoot, full, `skill "${e}"`);
       const skillMd = join(full, "SKILL.md");
       if (!existsSync(skillMd)) continue;

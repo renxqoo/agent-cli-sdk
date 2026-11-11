@@ -24,9 +24,8 @@ Import from the main package `@renxqoo/agent-cli-sdk`, no subpath needed:
 | `createLocalState({ dir })` / `createMemoryLocalState()`                                                                                                     | the app's unified local state (including `ConfigStore`)                                        |
 | `defaultProviders()` / `flagProvider` / `envProvider` / `envBearerProvider` / `fileProvider` / `oauthProvider`                                               | the provider chain's default providers (5 by default)                                          |
 | `resolveWithChain(providers, pctx)`                                                                                                                          | runs the chain to get a `TokenResult` (stops on first hit)                                     |
-| `resolveIdentityWithChain(providers, pctx)`                                                                                                                  | runs the chain to get an `IdentityHint` (unified top-level user/bot output format)             |
 | `injectAuthHeader(req, token, style)`                                                                                                                        | injects the header per authStyle (`bearer`/`x-api-key`/`basic`)                                |
-| `createOn401Hook({cfg, store, namespace})`                                                                                                                   | the 401 singleflight refresh primitive (called by the public `handleUnauthorized` hook)        |
+| `createOAuthRefresh({cfg, store, namespace})`                                                                                                                   | the 401 singleflight refresh primitive (called by the public `handleUnauthorized` hook)        |
 | `deviceAuthorization` / `pollDeviceToken` / `getUserInfo` / `revokeToken` / `registerClient`                                                                 | OAuth 2.1 endpoint primitives (device authorization + user info/revoke/register)               |
 | Types: `Plugin` / `CredentialsApi` / `CommandContext` / `ProviderContext` / `TokenResult` / `IdentityHint` / `ConfigStore` / `CredentialProvider` / `AuthStyle` | —                                                                                              |
 
@@ -40,88 +39,64 @@ See `createCrmAuth` in `apps/crm/src/auth.ts` for a reference implementation. Be
 
 ```ts
 import {
-  type Plugin,
-  type CommandContext,
-  type ProviderContext,
-  type ConfigStore,
-  defaultProviders,
-  resolveWithChain,
-  injectAuthHeader,
-  createOn401Hook,
   AuthenticationError,
+  createOAuthRefresh,
+  defaultProviders,
+  injectAuthHeader,
+  resolveWithChain,
+  type CommandContext,
+  type OAuthClientConfig,
+  type PluginFactory,
+  type TokenResult,
 } from "@renxqoo/agent-cli-sdk";
 
-export function createCrmAuth<State extends { user?: unknown }>(opts: {
+export function createCustomAuth<State>(options: {
   namespace: string;
-  authStyle?: "bearer" | "x-api-key" | "basic";
-  oauth?: { baseUrl: string; clientId: string; clientSecret: string };
-}): Plugin<State> {
-  const authStyle = opts.authStyle ?? "bearer";
-  const sessions = new WeakMap<CommandContext<State>, { token: string; refreshable: boolean }>();
-
-  // Assembly-time state: filled in apply after resolving from services.localState.store (the factory takes no dir/store parameter).
-  let ready!: {
-    store: ConfigStore;
-    providers: ReturnType<typeof defaultProviders>;
-    on401?: () => Promise<Record<string, unknown> | null>;
-  };
-
+  oauth: OAuthClientConfig;
+}): PluginFactory<State> {
   return {
-    name: `auth:${opts.namespace}`,
-    enforce: "pre",
-
-    async apply(services) {
-      const store = services.localState.store;
-      ready = {
-        store,
-        providers: defaultProviders(),
-        on401: opts.oauth
-          ? createOn401Hook({ cfg: opts.oauth, store, namespace: opts.namespace })
-          : undefined,
+    name: `auth:${options.namespace}`,
+    async setup({ localState }) {
+      const store = localState.store;
+      const providers = defaultProviders();
+      const refresh = createOAuthRefresh({ cfg: options.oauth, store, namespace: options.namespace });
+      const sessions = new WeakMap<CommandContext<State>, TokenResult>();
+      return {
+        name: `auth:${options.namespace}`,
+        enforce: "pre",
+        async beforeCommand(ctx) {
+          const resolved = await resolveWithChain(providers, {
+            namespace: options.namespace, configStore: store, args: {}, env: process.env,
+          });
+          if (!resolved) throw new AuthenticationError({
+            subtype: "no_credentials", message: "Sign in before running this command",
+          });
+          sessions.set(ctx, resolved.token);
+        },
+        async beforeRequest(ctx, request) {
+          const prepared = { ...request, headers: { ...request.headers } };
+          const session = sessions.get(ctx);
+          if (session) injectAuthHeader(prepared, session.token, "bearer");
+          return prepared;
+        },
+        async handleUnauthorized(ctx, event) {
+          const session = sessions.get(ctx);
+          if (!session?.refreshable || !session.sessionId) return { action: "decline" };
+          const authorization = Object.entries(event.request.headers ?? {})
+            .findLast(([name]) => name.toLowerCase() === "authorization")?.[1];
+          if (!authorization?.startsWith("Bearer ")) return { action: "decline" };
+          const token = await refresh({
+            sessionId: session.sessionId,
+            token: authorization.slice("Bearer ".length),
+          });
+          if (!token) return {
+            action: "reject",
+            error: new AuthenticationError({ subtype: "token_expired", message: "Sign in again" }),
+          };
+          sessions.set(ctx, { ...session, token: token.access_token });
+          return { action: "retry" };
+        },
       };
-    },
-
-    async beforeCommand(ctx: CommandContext<State>) {
-      const { store, providers } = ready;
-      const pctx: ProviderContext = {
-        namespace: opts.namespace,
-        configStore: store,
-        args: {},
-        env: process.env,
-      };
-      const resolved = await resolveWithChain(providers, pctx); // ① provider chain gets the token
-      if (!resolved)
-        throw new AuthenticationError({
-          subtype: "no_credentials",
-          message: "No credentials configured",
-          hint: "Set the XXX_API_KEY environment variable",
-        });
-      // ② wrap store into ctx.credentials; ③ inject scopes; ④ fetch identity into state.user
-      // ⑤ cache the token for beforeRequest
-      sessions.set(ctx, {
-        token: resolved.token.token,
-        refreshable: resolved.token.refreshable === true,
-      });
-    },
-
-    async beforeRequest(ctx, req) {
-      const prepared = { ...req, headers: { ...req.headers } };
-      const session = sessions.get(ctx);
-      if (session) injectAuthHeader(prepared, session.token, authStyle);
-      return prepared;
-    },
-
-    async handleUnauthorized(ctx) {
-      const session = sessions.get(ctx);
-      if (!ready.on401 || !session?.refreshable) return { action: "decline" };
-      const token = await ready.on401();
-      if (!token)
-        return {
-          action: "reject",
-          error: new AuthenticationError({ subtype: "token_expired", message: "refresh failed" }),
-        };
-      sessions.set(ctx, { ...session, token });
-      return { action: "retry" };
     },
   };
 }
@@ -133,7 +108,7 @@ export function createCrmAuth<State extends { user?: unknown }>(opts: {
 | -------------------- | ------------------------------------------------------------------------------------------- |
 | `beforeCommand`      | runs the provider chain to get the token; wraps `store` into `ctx.credentials`; establishes a context-keyed session |
 | `beforeRequest`      | injects the header by authStyle with `injectAuthHeader(req, token, authStyle)`              |
-| `handleUnauthorized` | calls `createOn401Hook(...)`; on success updates the session and returns `{ action: "retry" }` |
+| `handleUnauthorized` | calls `createOAuthRefresh(...)`; on success updates the session and returns `{ action: "retry" }` |
 
 **Key disciplines:**
 
@@ -185,7 +160,6 @@ export interface CredentialProvider {
   name(): string; // provider name (logging/tracing)
   priority?(): number; // priority; lower values tried first, default 10
   resolveToken(pctx: ProviderContext): Promise<TokenResult | null>; // null = none, the chain continues
-  resolveIdentity?(pctx: ProviderContext): Promise<IdentityHint | null>;
 }
 
 export interface ProviderContext {
@@ -265,7 +239,7 @@ defineCli({ plugins: [auth, signPlugin], ... })
 | **Authentication** (get token, inject header, fill user)   | `defineAuth`; special protocols use the provider chain | put the returned Plugin into `plugins` |
 | **Non-auth cross-cutting** (fixed args, signing, formatting, errors, audit) | ordinary plugin hooks               | write a Plugin object and put it into `plugins` |
 
-**The provider chain is provided by agent-cli-sdk's `resolveWithChain`/`resolveIdentityWithChain`**; business packages do not call `credentials.register()` directly (removed). All authentication goes through a self-written auth Plugin (which calls the provider chain); non-auth cross-cutting uses ordinary plugins and does not go through the provider chain.
+**The provider chain is provided by agent-cli-sdk's `resolveWithChain`**; business packages do not call `credentials.register()` directly (removed). All authentication goes through a self-written auth Plugin (which calls the provider chain); non-auth cross-cutting uses ordinary plugins and does not go through the provider chain.
 
 ---
 
@@ -290,9 +264,9 @@ The app decides the root directory exactly once via `defineCliApp({ dir })`. The
 > **Security contract**:
 > - Credentials and config are stored **in plaintext at-rest**, protected only by filesystem permissions (no obfuscation/encryption). If you need at-rest encryption, keep them in an external store such as the OS keychain.
 > - `0600` (files) / `0700` (directories) only take effect on **POSIX**; Windows doesn't support chmod, and file ACLs inherit from the parent directory.
-> - The storage directory is decided exactly once by the business app via `defineCliApp({ dir })`; `defineAuth`, `createUpdateNotifier`, and `defineInstaller` receive the same localState through `apply(services)`. agent-cli-sdk **does not ship a default directory**, and the high-level APIs never accept a directory parameter.
+> - The storage directory is decided exactly once by the business app via `defineCliApp({ dir })`; `defineAuth`, `createUpdateNotifier`, and `defineInstaller` receive the same localState through `setup(services)`. agent-cli-sdk **does not ship a default directory**, and the high-level APIs never accept a directory parameter.
 > - Credential/config file reads go through the same **strict bounded parser** as command input (rejects duplicate keys and unsafe keys, limits depth/size).
-> - The OAuth refresh "read → exchange token → write" transaction is protected by a **cross-process file lock** (`ConfigStore.withLock`), avoiding lost updates when concurrent CLIs overwrite each other.
+> - The OAuth refresh "read → exchange token → write" transaction is protected by a **cross-process file lock** (`ConfigStore.transactCredentials`), avoiding lost updates when concurrent CLIs overwrite each other.
 
 ### Credential File Structure
 
@@ -343,7 +317,7 @@ export interface ConfigStore {
   clearCredentials(namespace: string): Promise<void>;
   loadConfig(namespace: string): Promise<Record<string, unknown>>; // <dir>/config/<ns>.json, missing = {}
   saveConfig(namespace: string, data: Record<string, unknown>): Promise<void>; // full replacement, permission 0600
-  withLock<T>(namespace: string, fn: () => Promise<T>): Promise<T>; // credential read-modify-write transaction lock
+  transactCredentials<T>(namespace: string, operation: (transaction: CredentialTransaction) => Promise<T>): Promise<T>; // credential read-modify-write transaction lock
 }
 ```
 
@@ -410,7 +384,7 @@ $ rxcli-orders list --verbose 2>&1 | grep -i auth
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `loadCredentials()` reads a fixed file      | `ctx.credentials.get(namespace)` reads by namespace (goes through the provider chain)                                                                              |
 | fixed priority chain                        | `resolveWithChain` + `defaultProviders()` (5 providers by default)                                                                                                 |
-| hardcoded OAuth token renewal               | 401 detection + singleflight reuse at the framework's **request layer**; refresh execution is provided by the auth Plugin's `createOn401Hook`. The two cooperate (see "About 401 automatic renewal" in `04-errors.md`) |
+| hardcoded OAuth token renewal               | 401 detection + singleflight reuse at the framework's **request layer**; refresh execution is provided by the auth Plugin's `createOAuthRefresh`. The two cooperate (see "About 401 automatic renewal" in `04-errors.md`) |
 | single middle-layer baseUrl                 | each business package declares its own baseUrl (defineCli config); ConfigStore only manages credentials                                                            |
 | fixed auth implementation                   | `defineAuth` covers standard scenarios; special protocols extend via public Plugins and building blocks                                                             |
 

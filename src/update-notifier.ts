@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Plugin } from "./plugin-contracts.js";
+import type { PluginFactory } from "./plugin-contracts.js";
 
 const DEFAULT_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 const DEFAULT_RETRY_INTERVAL_MS = 60 * 60 * 1_000;
@@ -47,78 +47,80 @@ export interface UpdateNotifierOptions {
  */
 export function createUpdateNotifier<State = Record<string, never>>(
   options: UpdateNotifierOptions,
-): Plugin<State> {
+): PluginFactory<State> {
   assertOptions(options);
   const registryUrl = resolveRegistryUrl(options.registryUrl);
 
-  // Cache target is resolved in apply: file-backed local state gets a disk cache,
-  // memory local state falls back to a process-local map (no background refresh).
-  let cacheFile: string | null = null;
-  const memoryCaches = new Map<string, UpdateCache>();
-
-  const readCache = (): UpdateCache => {
-    if (cacheFile) return readFileCache(cacheFile, options.packageName);
-    return memoryCaches.get(options.packageName) ?? { packageName: options.packageName };
-  };
-
-  const writeCache = (cache: UpdateCache): boolean => {
-    if (cacheFile) return writeFileCache(cacheFile, cache);
-    memoryCaches.set(options.packageName, cache);
-    return true;
-  };
-
   return {
     name: "update-notifier",
-    enforce: "post",
+    setup(services) {
+      // Cache target is resolved in setup: file-backed local state gets a disk cache,
+      // memory local state falls back to a process-local map (no background refresh).
+      let cacheFile: string | null = null;
+      const memoryCaches = new Map<string, UpdateCache>();
 
-    apply(services) {
+      const readCache = (): UpdateCache => {
+        if (cacheFile) return readFileCache(cacheFile, options.packageName);
+        return memoryCaches.get(options.packageName) ?? { packageName: options.packageName };
+      };
+
+      const writeCache = (cache: UpdateCache): boolean => {
+        if (cacheFile) return writeFileCache(cacheFile, cache);
+        memoryCaches.set(options.packageName, cache);
+        return true;
+      };
+
       if (services.localState.kind === "file") {
         cacheFile = resolveCacheFile(services.localState.paths.updatesDir, options.packageName);
       }
-    },
+      return {
+        name: "update-notifier",
+        enforce: "post",
 
-    async afterAppRun(event) {
-      // Operational notices only follow successful runs: a failed run must keep its
-      // stderr error envelope parseable and free of system messages.
-      if (event.exitCode !== 0) return;
-      if (options.enabled === false || process.env.NO_UPDATE_NOTIFIER === "1") return;
+        async afterAppRun(event) {
+          // Operational notices only follow successful runs: a failed run must keep its
+          // stderr error envelope parseable and free of system messages.
+          if (event.exitCode !== 0) return;
+          if (options.enabled === false || process.env.NO_UPDATE_NOTIFIER === "1") return;
 
-      const now = Date.now();
-      let cache = readCache();
-      const notificationIntervalMs =
-        options.notificationIntervalMs ?? DEFAULT_NOTIFICATION_INTERVAL_MS;
-      if (
-        cache.latest &&
-        isNewerVersion(cache.latest, options.currentVersion) &&
-        (cache.notifiedVersion !== cache.latest ||
-          now - (cache.notifiedAt ?? 0) >= notificationIntervalMs)
-      ) {
-        process.stderr.write(renderSystemMessage(options, cache.latest));
-        cache = { ...cache, notifiedAt: now, notifiedVersion: cache.latest };
-        writeCache(cache);
-      }
+          const now = Date.now();
+          let cache = readCache();
+          const notificationIntervalMs =
+            options.notificationIntervalMs ?? DEFAULT_NOTIFICATION_INTERVAL_MS;
+          if (
+            cache.latest &&
+            isNewerVersion(cache.latest, options.currentVersion) &&
+            (cache.notifiedVersion !== cache.latest ||
+              now - (cache.notifiedAt ?? 0) >= notificationIntervalMs)
+          ) {
+            process.stderr.write(renderSystemMessage(options, cache.latest));
+            cache = { ...cache, notifiedAt: now, notifiedVersion: cache.latest };
+            writeCache(cache);
+          }
 
-      const checkIntervalMs = options.checkIntervalMs ?? DEFAULT_CHECK_INTERVAL_MS;
-      const retryIntervalMs = options.retryIntervalMs ?? DEFAULT_RETRY_INTERVAL_MS;
-      const lastAttempt = cache.attemptedAt ?? cache.checkedAt ?? 0;
-      const successfulCheckIsFresh = now - (cache.checkedAt ?? 0) < checkIntervalMs;
-      if (successfulCheckIsFresh || now - lastAttempt < retryIntervalMs) return;
+          const checkIntervalMs = options.checkIntervalMs ?? DEFAULT_CHECK_INTERVAL_MS;
+          const retryIntervalMs = options.retryIntervalMs ?? DEFAULT_RETRY_INTERVAL_MS;
+          const lastAttempt = cache.attemptedAt ?? cache.checkedAt ?? 0;
+          const successfulCheckIsFresh = now - (cache.checkedAt ?? 0) < checkIntervalMs;
+          if (successfulCheckIsFresh || now - lastAttempt < retryIntervalMs) return;
 
-      const attempted: UpdateCache = {
-        ...cache,
-        packageName: options.packageName,
-        attemptedAt: now,
+          const attempted: UpdateCache = {
+            ...cache,
+            packageName: options.packageName,
+            attemptedAt: now,
+          };
+          if (!writeCache(attempted)) return;
+          // Detached helpers can only share a disk cache; memory local state skips the refresh.
+          if (cacheFile) {
+            refreshInBackground({
+              cacheFile,
+              packageName: options.packageName,
+              registryUrl,
+              timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+            });
+          }
+        },
       };
-      if (!writeCache(attempted)) return;
-      // Detached helpers can only share a disk cache; memory local state skips the refresh.
-      if (cacheFile) {
-        refreshInBackground({
-          cacheFile,
-          packageName: options.packageName,
-          registryUrl,
-          timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        });
-      }
     },
   };
 }

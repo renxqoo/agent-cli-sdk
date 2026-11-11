@@ -47,7 +47,7 @@ Default to the simplest verifiable design: one domain uses top-level `commands`;
 6. Return `{ data, meta? }` or `void`. `data` must be an object, array, or `null`.
 7. Write logs through `ctx.log`; business commands must not write directly to stdout.
 8. Run `app.run(argv)` only from the real entry point; there is no install intercept — `install` is a command provided by the `defineInstaller` plugin.
-9. When auth, installation, or update awareness needs local files, decide the app-owned root once with `defineCliApp({ dir })`; plugins receive the resulting local state through `apply(services)`, never through directory parameters.
+9. When auth, installation, or update awareness needs local files, decide the app-owned root once with `defineCliApp({ dir })`; plugins receive the resulting local state through `setup(services)`, never through directory parameters.
 10. If update awareness is requested, use the framework's opt-in `createUpdateNotifier`; keep its XML system message on stderr and never auto-install a suggested update.
 
 ### 4. Enforce trust boundaries
@@ -84,8 +84,8 @@ Do not claim production readiness from a successful build alone. Report unverifi
 ## Invariants
 
 - `bin`, `defineCli.name`, and auth `credentialNamespace` serve different purposes. Keep them aligned by default and check for collisions.
-- `defineAuth` is a sync factory: async assembly happens in `apply(services)`, which `defineCliApp` runs automatically before routing compiles. Never `await` the factory.
-- Decide the app's local-state root exactly once with `defineCliApp({ dir })`; the assembler injects one local state into `defineAuth`, `defineInstaller`, and `createUpdateNotifier` via `apply(services)`. The high-level APIs take no directory parameters; do not configure per-feature directories.
+- `defineAuth` is a sync factory: async assembly happens in `setup(services)`, which `defineCliApp` runs automatically before routing compiles. Never `await` the factory.
+- Decide the app's local-state root exactly once with `defineCliApp({ dir })`; the assembler injects one local state into `defineAuth`, `defineInstaller`, and `createUpdateNotifier` via `setup(services)`. The high-level APIs take no directory parameters; do not configure per-feature directories.
 - Derive OAuth scopes from a verified service contract and least privilege. Never guess scopes or default to every advertised scope.
 - Use top-level `commands` for one domain, such as `<bin> list`; avoid `<domain> <domain> list`. Use `namespaces` only for multiple unrelated domains.
 - Never flatten same-named command groups with spread; preserve routes with `namespaces`.

@@ -19,6 +19,7 @@ export const identityKey: unique symbol = Symbol("rxcli.identity");
 
 /** Internal per-invocation idempotency policy installed by the command runner. */
 export const idempotencyKey: unique symbol = Symbol("rxcli.idempotency");
+export const readOnlyRequestKey: unique symbol = Symbol("rxcli.readOnlyRequest");
 
 export function createStderrLog(prefix?: string): LogApi {
   const write = (level: string, message: unknown) => {

@@ -187,7 +187,6 @@ The generator extracts the following mechanical information from the command def
 | `args.*.required` | Whether required          | The "Required" column of the argument table                 |
 | `args.*.default`  | Default value             | The "Default" column of the argument table                  |
 | `args.*.desc`     | **Optional** description  | The "Description" column of the argument table (— if not filled in) |
-| `requiresScope`   | Required scope            | The "Permission" column of the command table                |
 
 ### Generation commands
 

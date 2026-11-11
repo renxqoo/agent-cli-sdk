@@ -1,202 +1,81 @@
-/**
- * Cross-process advisory locking via an O_EXCL lockfile with stale-owner recovery.
- *
- * Shared by the credential store (refresh transaction) and skills sync. The lock is
- * released in a `finally`; callers that may be terminated by signals should register
- * their own SIGINT/SIGHUP cleanup for the abrupt-exit case.
- */
-
-import {
-  constants,
-  closeSync,
-  openSync,
-  readFileSync,
-  unlinkSync,
-  writeFileSync,
-  mkdirSync,
-} from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { ConflictError } from "../errs/index.js";
 
 export interface WithFileLockOptions {
-  /** Max total wait to acquire the lock, in ms. 0 = single attempt (fail fast). Default 0. */
+  /** Maximum acquisition wait. Zero makes one immediate attempt. */
   timeoutMs?: number;
-  /** Poll interval while waiting, in ms. Default 50. */
   pollIntervalMs?: number;
-  /** A lock older than this (ms) is reclaimed even if its owner looks live. Default 60_000. */
-  staleAfterMs?: number;
 }
 
-interface LockOwner {
-  pid: number;
-  startedAt: number;
-}
-
-const DEFAULT_STALE_MS = 60_000;
-const DEFAULT_POLL_MS = 50;
-
-function lockFilePath(dir: string, key: string): string {
-  // Keep the filename filesystem-safe across POSIX + Windows.
-  const safe = key.replace(/[^a-z0-9-]/gi, "_").slice(0, 64) || "default";
-  return join(dir, `.rxcli-${safe}.lock`);
-}
-
-function isPidAlive(pid: number): boolean {
-  if (pid <= 0) return false;
+/** SQLite's OS locks are shared by Node and Bun and released on process termination. */
+function openLock(dir: string, key: string): DatabaseSync {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const digest = createHash("sha256").update(key).digest("hex");
+  const path = join(dir, `.rxcli-${digest}.sqlite`);
+  const database = new DatabaseSync(path);
   try {
-    process.kill(pid, 0);
+    chmodSync(path, 0o600);
+  } catch (error) {
+    if (process.platform !== "win32") {
+      database.close();
+      throw error;
+    }
+  }
+  database.exec("PRAGMA busy_timeout = 0");
+  return database;
+}
+
+function tryAcquire(database: DatabaseSync): boolean {
+  try {
+    database.exec("BEGIN IMMEDIATE");
     return true;
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
+    if ((error as { errcode?: number }).errcode === 5) return false;
+    throw error;
   }
 }
 
-function readOwner(path: string): LockOwner | null {
-  try {
-    const data = readFileSync(path, "utf8");
-    const parsed = JSON.parse(data) as Partial<LockOwner>;
-    if (typeof parsed.pid === "number" && typeof parsed.startedAt === "number") {
-      return { pid: parsed.pid, startedAt: parsed.startedAt };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function isStale(owner: LockOwner | null, staleAfterMs: number): boolean {
-  if (!owner) return true;
-  if (owner.pid === process.pid) return false;
-  if (!isPidAlive(owner.pid)) return true;
-  return Date.now() - owner.startedAt > staleAfterMs;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Run `fn` while holding an exclusive lock named `key` inside `dir`.
- *
- * Acquisition uses `O_EXCL | O_CREAT`: the create is atomic. If the lockfile already
- * exists, its owner record is inspected; a lock whose owner PID is dead, or whose
- * `startedAt` exceeds `staleAfterMs`, is reclaimed. This recovers from a process
- * killed mid-critical-section (where the `finally` release never ran).
- */
 export async function withFileLock<T>(
   dir: string,
   key: string,
-  fn: () => Promise<T>,
+  operation: () => Promise<T>,
   options: WithFileLockOptions = {},
 ): Promise<T> {
-  mkdirSync(dir, { recursive: true });
-  const lockPath = lockFilePath(dir, key);
-  const timeoutMs = options.timeoutMs ?? 0;
-  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_MS;
-  const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_MS;
-  const deadline = Date.now() + timeoutMs;
-
-  // Acquire.
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    try {
-      const handle = openSync(lockPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL);
-      writeFileSync(handle, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
-      // Close the fd explicitly: writeFileSync(fd) does NOT close it. On Windows an
-      // open handle blocks unlinkSync (EPERM), so the lock could never be released.
-      closeSync(handle);
-      break;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      if (isStale(readOwner(lockPath), staleAfterMs)) {
-        // Best-effort reclaim: unlink then retry the atomic create next loop iteration.
-        try {
-          unlinkSync(lockPath);
-        } catch {
-          /* another process reclaimed it; loop will retry */
-        }
-      }
-    }
-    if (Date.now() >= deadline) {
-      throw new ConflictError(`Could not acquire lock "${key}" within ${timeoutMs}ms`);
-    }
-    await sleep(pollIntervalMs);
+  const timeout = options.timeoutMs ?? 0;
+  const pollInterval = options.pollIntervalMs ?? 25;
+  if (
+    !Number.isFinite(timeout) ||
+    timeout < 0 ||
+    !Number.isFinite(pollInterval) ||
+    pollInterval <= 0
+  ) {
+    throw new RangeError("Lock timeout must be non-negative and polling interval must be positive");
   }
-
+  const deadline = performance.now() + timeout;
+  const database = openLock(dir, key);
   try {
-    return await fn();
-  } finally {
-    try {
-      unlinkSync(lockPath);
-    } catch {
-      /* lock already gone */
+    while (!tryAcquire(database)) {
+      const remaining = deadline - performance.now();
+      if (remaining <= 0)
+        throw new ConflictError(`Could not acquire lock "${key}" within ${timeout}ms`);
+      await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, remaining)));
     }
+    return await operation();
+  } finally {
+    // Closing the connection rolls back the empty transaction and releases its OS lock.
+    database.close();
   }
 }
 
-/** Remove a lockfile if present (for cleanup helpers / signal handlers). */
-export function releaseFileLock(dir: string, key: string): void {
+export function withFileLockSync<T>(dir: string, key: string, operation: () => T): T {
+  const database = openLock(dir, key);
   try {
-    unlinkSync(lockFilePath(dir, key));
-  } catch {
-    /* ignore */
-  }
-}
-
-/**
- * Synchronous single-attempt variant for call stacks that must stay synchronous
- * (e.g. skills sync). It acquires once with stale-owner reclaim — no polling — so a
- * contended lock throws immediately. Stale recovery still lets the next run reclaim a
- * lock left behind by a killed process.
- */
-export function withFileLockSync<T>(
-  dir: string,
-  key: string,
-  fn: () => T,
-  options: WithFileLockOptions = {},
-): T {
-  mkdirSync(dir, { recursive: true });
-  const lockPath = lockFilePath(dir, key);
-  const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_MS;
-
-  const acquire = (): boolean => {
-    try {
-      const handle = openSync(lockPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL);
-      writeFileSync(handle, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
-      closeSync(handle); // see withFileLock: must close before unlink on Windows
-      return true;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      return false;
-    }
-  };
-
-  if (!acquire()) {
-    if (isStale(readOwner(lockPath), staleAfterMs)) {
-      try {
-        unlinkSync(lockPath);
-      } catch {
-        /* another process reclaimed it */
-      }
-      if (!acquire()) {
-        throw new ConflictError(
-          `Could not acquire lock "${key}" in ${dir} (held by another process)`,
-        );
-      }
-    } else {
-      throw new ConflictError(
-        `Could not acquire lock "${key}" in ${dir} (held by another process)`,
-      );
-    }
-  }
-
-  try {
-    return fn();
+    if (!tryAcquire(database)) throw new ConflictError(`Lock "${key}" is held by another process`);
+    return operation();
   } finally {
-    try {
-      unlinkSync(lockPath);
-    } catch {
-      /* lock already gone */
-    }
+    database.close();
   }
 }

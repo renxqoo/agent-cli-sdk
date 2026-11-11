@@ -10,6 +10,24 @@ The format follows the conventions described in `CONTRIBUTING.md`: every release
 
 Record public API changes, user-visible behavior, breaking changes, and migration instructions under that heading.
 
+## Unreleased
+
+### Changed
+
+- Runtime baseline is Node.js 26+ and Bun 1.4+, with minimum-version and stable-release CI lanes.
+- PluginFactory.setup creates application-scoped Plugin runtimes. setupPlugins returns the assembled runtime list.
+- Credential identity is returned in the token snapshot. createOAuthRefresh requires the rejected OAuthSessionRef.
+- ConfigStore.transactCredentials stages and atomically commits namespace-exclusive credential changes.
+- SQLite transaction locks replace PID/TTL lockfiles and release ownership on process termination.
+- Skill sync validates source/manifest boundaries, reuses source snapshots, preserves file permissions and skips unchanged targets.
+- Route lookup uses the registry index. Repeated array flags append in linear time.
+- Diagnostic errors avoid unparsed values, leading help cannot execute a command, and request observers receive defensive snapshots.
+
+### Migration
+
+- Removed mutable plugin assembly, unbound OAuth refresh, separate provider identity resolution, raw credential lock callbacks, stale-lock options and SkillFileStore injection.
+- Consumer changes, stored credential handling and verification are described in [the runtime migration guide](docs/08-runtime-refactor.md).
+
 ## [@renxqoo/agent-cli-sdk@1.0.1] - 2026-08-16
 
 ### Changed

@@ -35,7 +35,6 @@ export {
   SkillRepository,
   type SkillRepositoryOptions,
   type GenerateSkillOptions,
-  type SkillFileStore,
 } from "./repository.js";
 export {
   flattenCommands,

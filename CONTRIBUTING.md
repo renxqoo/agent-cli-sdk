@@ -11,7 +11,7 @@ Thanks for helping improve rxcli and `@renxqoo/agent-cli-sdk`.
 
 ## Local development
 
-Requirements: Node.js 20 or 22 and pnpm 11.
+Requirements: Node.js 26+ or Bun 1.4+, with Node.js 26+ and pnpm 11 for build tooling.
 
 ```bash
 pnpm install --frozen-lockfile

@@ -25,6 +25,42 @@ const factories: Array<[string, () => ConfigStore]> = [
 ];
 
 describe.each(factories)("ConfigStore conformance: %s", (_name, createStore) => {
+  it("does not replace a valid document with unreadable data", async () => {
+    const store = createStore();
+    await store.saveCredentials("orders", { token: "valid" });
+    await expect(store.saveCredentials("orders", { constructor: "unsafe" })).rejects.toMatchObject({
+      category: "config",
+    });
+    await expect(
+      store.saveCredentials("orders", { text: "x".repeat(300_000) }),
+    ).rejects.toMatchObject({
+      category: "config",
+    });
+    expect(await store.loadCredentials("orders")).toEqual({ token: "valid" });
+  });
+
+  it("rolls back failed transactions and closes escaped handles", async () => {
+    const store = createStore();
+    await store.saveCredentials("orders", { token: "before" });
+    let escaped: import("../credentials/types.js").CredentialTransaction | undefined;
+    await expect(
+      store.transactCredentials("orders", async (transaction) => {
+        escaped = transaction;
+        transaction.write({ token: "after" });
+        expect(transaction.read()).toEqual({ token: "after" });
+        throw new Error("abort");
+      }),
+    ).rejects.toThrow("abort");
+    expect(await store.loadCredentials("orders")).toEqual({ token: "before" });
+    expect(() => escaped!.clear()).toThrow("closed");
+  });
+
+  it("treats constructor as an isolated namespace", async () => {
+    const store = createStore();
+    expect(await store.loadCredentials("constructor")).toBeNull();
+    await store.saveCredentials("constructor", { token: "own" });
+    expect(await store.loadCredentials("constructor")).toEqual({ token: "own" });
+  });
   it.each(["", ".", "..", "../escape", "two words", "_private", "UPPER"])(
     "rejects invalid namespace %j for every operation",
     async (namespace) => {

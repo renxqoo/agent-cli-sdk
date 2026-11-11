@@ -88,6 +88,8 @@ export function waitForCallback(options: {
         reject(error);
       };
     });
+    // Setup/browser failures can settle this before the caller receives the handle.
+    void result.catch(() => {});
 
     const server: Server = createServer((request, response) => {
       const evaluation = evaluateCallbackRequest(

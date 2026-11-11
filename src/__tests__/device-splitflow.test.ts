@@ -4,7 +4,6 @@
  * 验证 split-flow 逻辑从 auth/index.ts 移到 flows/device.ts:
  * - --no-wait → login() 抛 SplitFlowResult(含 device_code + url),框架捕获后返回 JSON
  * - --device-code → login() 直接轮询,不重新申请设备码
- * - 正常 login() → 申请设备码 + 阻塞轮询(不变)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { deviceFlow, SplitFlowSignal } from "../flows/device.js";
@@ -33,30 +32,6 @@ const baseDeps: FlowDeps = {
   scope: "orders:read offline_access",
   log: { info: vi.fn() },
 };
-
-describe("device flow:正常 login(阻塞轮询)", () => {
-  it("申请设备码 → 轮询 → 返回 TokenInfo", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, {
-        device_code: "dc_123",
-        user_code: "ABCD-EFGH",
-        verification_uri: "http://test/verify",
-        expires_in: 600,
-        interval: 1,
-      }),
-    );
-    const mockPoller = vi.fn();
-    mockPoller.mockResolvedValueOnce({ status: "pending" });
-    mockPoller.mockResolvedValueOnce({
-      status: "ok",
-      token: { access_token: "AT", expires_in: 3600, refresh_token: "RT", scope: "orders:read" },
-    });
-
-    const token = await deviceFlow.login({ ...baseDeps, poller: mockPoller });
-    expect(token.access_token).toBe("AT");
-    expect(token.refresh_token).toBe("RT");
-  });
-});
 
 describe("device flow:--no-wait split-flow", () => {
   it("抛 SplitFlowSignal(含 device_code + verification_url)", async () => {

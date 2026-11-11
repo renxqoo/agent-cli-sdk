@@ -17,15 +17,22 @@ export function assertExistingPathInside(
   candidate: string,
   label: string,
 ): string {
+  return createPathGuard(allowedRoot)(candidate, label);
+}
+
+/** Resolve the authority once for operations that validate a complete source tree. */
+export function createPathGuard(allowedRoot: string): (candidate: string, label: string) => string {
   const root = realpathSync(allowedRoot);
-  const resolved = realpathSync(candidate);
-  if (resolved !== root && !resolved.startsWith(root + sep)) {
-    throw new InternalError({
-      subtype: "contract_violation",
-      message: `${label} resolves outside its allowed directory`,
-    });
-  }
-  return resolved;
+  return (candidate, label) => {
+    const resolved = realpathSync(candidate);
+    if (resolved !== root && !resolved.startsWith(root + sep)) {
+      throw new InternalError({
+        subtype: "contract_violation",
+        message: `${label} resolves outside its allowed directory`,
+      });
+    }
+    return resolved;
+  };
 }
 
 /** Prepare a generated skill directory while rejecting pre-existing escaping symlinks. */

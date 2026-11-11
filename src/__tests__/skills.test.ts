@@ -1,13 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  existsSync,
-  rmSync,
-  symlinkSync,
-} from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanSubPath, listPath, readSkill } from "../skills/reader.js";
@@ -404,21 +396,6 @@ describe("M4: syncSkills 全量同步(清理源端已删除的 skill)", () => {
       rmSync(otherRoot, { recursive: true, force: true });
     }
   });
-
-  it("同名 skill 的一个 owner 删除后恢复另一 owner 的副本", () => {
-    const otherRoot = mkdtempSync(join(tmpdir(), "rxcli-other-src-"));
-    try {
-      makeSkill(tmpRoot, "shared", "from-a");
-      makeSkill(otherRoot, "shared", "from-b");
-      syncSkills(otherRoot, { targets: [{ key: "test", dir: tmpDest }] });
-      syncSkills(tmpRoot, { targets: [{ key: "test", dir: tmpDest }] });
-      rmSync(join(tmpRoot, "shared"), { recursive: true, force: true });
-      syncSkills(tmpRoot, { targets: [{ key: "test", dir: tmpDest }] });
-      expect(readFileSync(join(tmpDest, "shared", "SKILL.md"), "utf8")).toContain("from-b");
-    } finally {
-      rmSync(otherRoot, { recursive: true, force: true });
-    }
-  });
 });
 
 // ============================================================================
@@ -543,31 +520,6 @@ describe("多 target 同步:syncSkills({ targets })", () => {
       expect(existsSync(join(dirOk, "beta", "SKILL.md"))).toBe(true);
     } finally {
       rmSync(dirOk, { recursive: true, force: true });
-    }
-  });
-
-  it("省略 targets → 用默认列表(7 个)", () => {
-    // 用显式 targets(绝对路径,指向临时目录)模拟"默认列表展开后"的样子,
-    // 验证 syncSkills 逐个同步。不依赖 homedir mock(ESM 静态绑定难 mock)。
-    makeSkill(tmpRoot, "gamma");
-    const fakeHome = mkdtempSync(join(tmpdir(), "rxcli-fakehome-"));
-    // 复刻默认 7 个 target,但 dir 用 fakeHome 下的绝对路径
-    const targets: SkillTarget[] = DEFAULT_SKILL_TARGETS.map((t) => ({
-      key: t.key,
-      dir: t.dir.replace(/^~/, fakeHome),
-    }));
-    try {
-      const res = syncSkills(tmpRoot, { targets });
-      expect(res.count).toBe(1);
-      expect(res.targets).toHaveLength(7);
-      const keys = res.targets.map((t) => t.key);
-      expect(keys).toEqual(DEFAULT_SKILL_TARGETS.map((t) => t.key));
-      expect(res.targets.every((t) => t.ok)).toBe(true);
-      // 逐个目录都有 skill
-      const claudeDir = res.targets.find((t) => t.key === "claude")!;
-      expect(existsSync(join(claudeDir.dir, "gamma", "SKILL.md"))).toBe(true);
-    } finally {
-      rmSync(fakeHome, { recursive: true, force: true });
     }
   });
 

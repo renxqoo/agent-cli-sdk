@@ -1,10 +1,26 @@
 import { Readable } from "node:stream";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { defineCommand } from "../define.js";
 import { compileCommandSchema } from "../command-schema.js";
 
 describe("Zod command arguments", () => {
+  it("uses the explicit positional order for validation and parsing", async () => {
+    const schema = z.object({ label: z.string().optional(), id: z.string() });
+    const command = compileCommandSchema("show", { schema, pos: ["id", "label"] });
+    await expect(command.resolve(["record", "label"], Readable.from([]))).resolves.toEqual({
+      id: "record",
+      label: "label",
+    });
+    expect(() => compileCommandSchema("show", { schema, pos: ["label", "id"] })).toThrow(
+      /required positional.*cannot follow/,
+    );
+  });
+
+  it("rejects fields that normalize to the same flag", () => {
+    const schema = z.object({ orderId: z.string(), order_id: z.string() });
+    expect(() => compileCommandSchema("show", { schema })).toThrow(/--order-id/);
+  });
+
   it("treats an omitted args definition as an argument-free argv command", async () => {
     const schema = compileCommandSchema("health", undefined);
 
@@ -12,6 +28,9 @@ describe("Zod command arguments", () => {
     expect(schema.signature).toEqual({ positionals: [], options: [] });
     await expect(schema.resolve([], Readable.from([]))).resolves.toEqual({});
     await expect(schema.resolve(["unexpected"], Readable.from([]))).rejects.toMatchObject({
+      subtype: "invalid_argument",
+    });
+    await expect(schema.resolve(["--no-unknown"], Readable.from([]))).rejects.toMatchObject({
       subtype: "invalid_argument",
     });
   });
@@ -90,27 +109,6 @@ describe("Zod command arguments", () => {
         Readable.from([]),
       ),
     ).rejects.toMatchObject({ subtype: "invalid_argument" });
-  });
-
-  it("infers run args only from the declared Zod schema", () => {
-    defineCommand({
-      name: "typed",
-      description: "typed",
-      args: {
-        schema: z.object({
-          id: z.string(),
-          limit: z.number().default(20),
-          query: z.string().optional(),
-        }),
-        pos: ["id"],
-      },
-      async run(_ctx, args) {
-        expectTypeOf(args.id).toEqualTypeOf<string>();
-        expectTypeOf(args.limit).toEqualTypeOf<number>();
-        expectTypeOf(args.query).toEqualTypeOf<string | undefined>();
-        return { data: args };
-      },
-    });
   });
 
   it("includes write-policy flags in the discoverable command signature", () => {

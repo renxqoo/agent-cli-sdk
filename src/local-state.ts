@@ -32,7 +32,6 @@ export interface CreateLocalStateOptions {
   /** Application-specific local-state root. Use a distinct directory for each CLI app. */
   dir: string;
   lockTimeoutMs?: number;
-  lockStaleAfterMs?: number;
 }
 
 /**
@@ -59,7 +58,6 @@ export function createLocalState(options: CreateLocalStateOptions): FileLocalSta
     store: fileStore({
       dir: root,
       lockTimeoutMs: options.lockTimeoutMs,
-      lockStaleAfterMs: options.lockStaleAfterMs,
     }),
   });
 }

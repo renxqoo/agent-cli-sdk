@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import type { DefineCliOptions } from "../types.js";
-import { APIError } from "../errs/index.js";
+import { APIError, InternalError } from "../errs/index.js";
 import { generateSkillSkeleton, refreshAutogen, type GenLang } from "./gen.js";
 import {
   listPath,
@@ -15,25 +15,15 @@ import {
 } from "./reader.js";
 import { syncSkills, type SyncResult } from "./sync.js";
 import type { SkillTarget } from "./targets.js";
-
-export interface SkillFileStore {
-  exists(path: string): boolean;
-  read(path: string): string;
-  write(path: string, content: string): void;
-}
-
-const NODE_SKILL_FILES: SkillFileStore = {
-  exists: existsSync,
-  read: (path) => readFileSync(path, "utf8"),
-  write: (path, content) => writeFileSync(path, content),
-};
+import { assertExistingPathInside } from "./path-guard.js";
+import { withFileLockSync } from "../infra/file-lock.js";
+import { writeAtomicFile } from "../infra/atomic-file.js";
 
 export interface SkillRepositoryOptions {
   root: string;
   binName: string;
   cli: Pick<DefineCliOptions<any>, "commands" | "namespaces" | "name" | "binName">;
   targets?: SkillTarget[];
-  files?: SkillFileStore;
 }
 
 export interface GenerateSkillOptions {
@@ -46,11 +36,9 @@ export interface GenerateSkillOptions {
 /** Cohesive skill collection: discovery, content, generation and publication. */
 export class SkillRepository {
   readonly #options: SkillRepositoryOptions;
-  readonly #files: SkillFileStore;
 
   constructor(options: SkillRepositoryOptions) {
     this.#options = options;
-    this.#files = options.files ?? NODE_SKILL_FILES;
   }
 
   list(): SkillInfo[] {
@@ -78,35 +66,56 @@ export class SkillRepository {
   generate(options: GenerateSkillOptions): { path: string; mode: "init" | "refresh" } {
     const directory = prepareSkillDir(this.#options.root, options.name);
     const path = join(directory, "SKILL.md");
-    const exists = this.#files.exists(path);
-    const language = options.language ?? "en";
+    return withFileLockSync(this.#options.root, `generate-${options.name}`, () => {
+      const exists = existsSync(path);
+      let entry;
+      try {
+        entry = lstatSync(path);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      if (entry) {
+        const resolved = assertExistingPathInside(directory, path, "Generated skill file");
+        if (!lstatSync(resolved).isFile())
+          throw new InternalError({
+            subtype: "contract_violation",
+            message: "SKILL.md must be a regular file",
+          });
+      }
+      const language = options.language ?? "en";
 
-    if (options.initialize && exists && !options.force) {
-      throw new APIError({
-        subtype: "already_exists",
-        message: `${path} already exists. Use --force to overwrite with the skeleton, or drop --init to refresh the AUTO-GEN block in place.`,
-        hint: "gen <name> --init --force  (overwrite)   |   gen <name>  (refresh in place)",
-      });
-    }
+      if (options.initialize && exists && !options.force) {
+        throw new APIError({
+          subtype: "already_exists",
+          message: `${path} already exists. Use --force to overwrite with the skeleton, or drop --init to refresh the AUTO-GEN block in place.`,
+          hint: "gen <name> --init --force  (overwrite)   |   gen <name>  (refresh in place)",
+        });
+      }
 
-    if (options.initialize || !exists) {
-      this.#files.write(
+      if (options.initialize || !exists) {
+        writeAtomicFile(
+          path,
+          generateSkillSkeleton(
+            options.name,
+            `${this.#options.binName} business skill`,
+            this.#options.binName,
+            this.#options.cli,
+            language,
+          ),
+        );
+        return { path, mode: "init" };
+      }
+
+      writeAtomicFile(
         path,
-        generateSkillSkeleton(
-          options.name,
-          `${this.#options.binName} business skill`,
+        refreshAutogen(
+          readSkill(this.#options.root, options.name).toString("utf8"),
           this.#options.binName,
           this.#options.cli,
           language,
         ),
       );
-      return { path, mode: "init" };
-    }
-
-    this.#files.write(
-      path,
-      refreshAutogen(this.#files.read(path), this.#options.binName, this.#options.cli, language),
-    );
-    return { path, mode: "refresh" };
+      return { path, mode: "refresh" };
+    });
   }
 }

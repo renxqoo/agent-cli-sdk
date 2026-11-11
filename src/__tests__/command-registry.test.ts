@@ -41,7 +41,22 @@ describe("CommandRegistry invariants", () => {
     ).toThrow(/namespace.*identifier/);
   });
 
-  it.each(["0", "99", "600", "999", "0xx", "6xx", "9xx", "50x"])(
+  it("isolates namespace names from inherited properties", () => {
+    const original = Object.assign;
+    try {
+      defineCli({
+        name: "demo",
+        description: "demo",
+        commands: {},
+        namespaces: { constructor: { assign: command("assign") } },
+      });
+      expect(Object.assign).toBe(original);
+    } finally {
+      Object.assign = original;
+    }
+  });
+
+  it.each(["0", "99", "600", "999", "0xx", "6xx", "9xx", "50x", "5x"])(
     "rejects impossible HTTP mapping key %s",
     (status) => {
       expect(() =>

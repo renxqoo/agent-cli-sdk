@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createContext } from "../context.js";
+import { createFetchAdapter } from "../request.js";
 import type {
   AttemptOutcome,
   HttpAdapter,
@@ -24,6 +25,104 @@ function response(status: number, data: unknown = {}): AttemptOutcome {
 }
 
 describe("RequestExecutor boundary", () => {
+  it("preserves class and own toJSON wire results across retries", async () => {
+    const bodies: unknown[] = [];
+    class Payload {
+      value = "original";
+      toJSON() {
+        return { value: "serialized" };
+      }
+    }
+    const fetcher = async (_url: unknown, init?: RequestInit) => {
+      bodies.push(init?.body);
+      return new Response("{}", { status: bodies.length % 2 === 1 ? 401 : 200 });
+    };
+    const ctx = createContext({
+      state: {},
+      adapter: createFetchAdapter({ baseUrl: "https://api.test", fetch: fetcher as typeof fetch }),
+      plugins: [
+        {
+          name: "retry",
+          async handleUnauthorized() {
+            return { action: "retry" };
+          },
+        },
+      ],
+    });
+    await ctx.post("/records", new Payload());
+    await ctx.post("/records", { toJSON: () => ({ value: "own" }) });
+    await ctx.post("/records", new Date("2026-01-01T00:00:00.000Z"));
+    expect(bodies).toEqual([
+      '{"value":"serialized"}',
+      '{"value":"serialized"}',
+      '{"value":"own"}',
+      '{"value":"own"}',
+      '"2026-01-01T00:00:00.000Z"',
+      '"2026-01-01T00:00:00.000Z"',
+    ]);
+  });
+
+  it("isolates response mutations between observers and from retry decisions", async () => {
+    const data = { count: 1 };
+    const seen: number[] = [];
+    const ctx = createContext({
+      state: {},
+      adapter: scriptedAdapter([response(200, data)]),
+      plugins: [
+        {
+          name: "mutating-audit",
+          async observeRequest(_ctx, event) {
+            if (event.outcome.kind === "response") {
+              event.outcome.response.status = 401;
+              (event.outcome.response.data as { count: number }).count = 999;
+            }
+          },
+        },
+        {
+          name: "next-audit",
+          async observeRequest(_ctx, event) {
+            if (event.outcome.kind === "response") seen.push(event.outcome.response.status);
+          },
+        },
+      ],
+    });
+    await expect(ctx.get("/records")).resolves.toMatchObject({ status: 200, data: { count: 1 } });
+    expect(seen).toEqual([200]);
+    expect(data).toEqual({ count: 1 });
+  });
+
+  it("replays the original body after a preparation hook mutates its private copy", async () => {
+    const body = { items: ["original"] };
+    const received: unknown[] = [];
+    const ctx = createContext({
+      state: {},
+      adapter: {
+        async send<T>(request) {
+          received.push(request.body);
+          return response(received.length === 1 ? 401 : 200) as AttemptOutcome<T>;
+        },
+      },
+      plugins: [
+        {
+          name: "prepare",
+          async beforeRequest(_ctx, request) {
+            (request.body as { items: string[] }).items.push("prepared");
+            return request;
+          },
+          async handleUnauthorized() {
+            return { action: "retry" };
+          },
+        },
+      ],
+    });
+    await ctx.post("/records", body);
+    expect(received).toEqual([
+      { items: ["original", "prepared"] },
+      { items: ["original", "prepared"] },
+    ]);
+    expect(body).toEqual({ items: ["original"] });
+  });
+
   it("awaits asynchronous observers before resolving the request", async () => {
     let release!: () => void;
     const pending = new Promise<void>((resolve) => {

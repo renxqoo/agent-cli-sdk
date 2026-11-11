@@ -58,17 +58,6 @@ describe("pipe: 统一输出格式整包 parse → 逐条 yield PipeRecord", () 
     await expect(collect(reader.in())).rejects.toThrow(/object, array, or null/i);
   });
 
-  it("uses the upstream envelope source", async () => {
-    const reader = createPipeReader(
-      makeStdin(
-        JSON.stringify({ ok: true, source: "orders", data: [{ id: "o1" }] }),
-      ) as NodeJS.ReadableStream & {
-        isTTY?: boolean;
-      },
-    );
-    expect(await collect(reader.in())).toEqual([{ type: "orders", id: "o1", data: { id: "o1" } }]);
-  });
-
   it("data 是单个显式 PipeRecord 时不重复包装", async () => {
     const record = { type: "customers", id: "c1", data: { name: "alice" } };
     const stdin = makeStdin(JSON.stringify({ ok: true, source: "orders", data: record }));

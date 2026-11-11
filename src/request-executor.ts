@@ -8,9 +8,11 @@ import type {
   RequestOptions,
   TransportResponse,
 } from "./types.js";
-import { CliError, InternalError, NetworkError } from "./errs/index.js";
-import { beforeRequest, handleUnauthorized, observeRequest } from "./plugin.js";
+import { CliError, InternalError, NetworkError, PolicyError } from "./errs/index.js";
+import { readOnlyRequestKey } from "./context.js";
+import { beforeRequest, compilePlugins, handleUnauthorized, observeRequest } from "./plugin.js";
 import { throwForResponse } from "./request.js";
+import { cloneRequest } from "./request-snapshot.js";
 
 export interface RequestExecutor<State> {
   execute<T>(
@@ -24,7 +26,7 @@ export function createRequestExecutor<State>(options: {
   plugins?: Plugin<State>[];
   errorOnStatus?: ErrorOnStatus;
 }): RequestExecutor<State> {
-  const plugins = options.plugins ?? [];
+  const plugins = compilePlugins(options.plugins ?? []);
 
   return {
     async execute<T>(
@@ -35,6 +37,15 @@ export function createRequestExecutor<State>(options: {
 
       for (let attempt = 1; attempt <= 2; attempt++) {
         const prepared = await beforeRequest(plugins, ctx, logicalRequest);
+        if (
+          (ctx as CommandContext<State> & { [readOnlyRequestKey]?: boolean })[readOnlyRequestKey] &&
+          prepared.method !== "GET"
+        ) {
+          throw new PolicyError({
+            subtype: "access_denied",
+            message: "Write requests are forbidden during dry-run",
+          });
+        }
         const outcome = await sendAttempt<T>(options.adapter, prepared);
         const event: RequestAttemptEvent<T> = {
           attempt,
@@ -86,12 +97,4 @@ async function sendAttempt<T>(
   } catch (error) {
     return { kind: "network-error", error };
   }
-}
-
-function cloneRequest(request: Readonly<RequestOptions>): RequestOptions {
-  return {
-    ...request,
-    ...(request.query ? { query: { ...request.query } } : {}),
-    ...(request.headers ? { headers: { ...request.headers } } : {}),
-  };
 }

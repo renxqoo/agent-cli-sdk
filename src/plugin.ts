@@ -20,6 +20,57 @@ import type {
 } from "./types.js";
 import { InternalError } from "./errs/index.js";
 import { isStructuredData } from "./output.js";
+import { cloneRequest, cloneRequestEvent } from "./request-snapshot.js";
+import type { PluginInput } from "./plugin-contracts.js";
+
+const hookPlans = new WeakMap<Plugin<any>[], Map<keyof Plugin<any>, Plugin<any>[]>>();
+const commandHooks = [
+  "beforeCommand",
+  "observeInput",
+  "beforeRequest",
+  "observeRequest",
+  "handleUnauthorized",
+  "transformOutput",
+  "observeError",
+  "handleError",
+] as const;
+
+/** Freeze the app's registration list and compile stable hook order once. */
+export function compilePlugins<State>(plugins: Plugin<State>[]): Plugin<State>[] {
+  if (hookPlans.has(plugins)) return plugins;
+  for (const plugin of plugins) {
+    if (typeof plugin.setup === "function") {
+      throw new InternalError({
+        subtype: "contract_violation",
+        message: "Plugin factories require defineCliApp or setupPlugins before defineCli",
+      });
+    }
+  }
+  const compiled = plugins.map((plugin) => {
+    const runtime: Plugin<State> = {
+      name: plugin.name,
+      enforce: plugin.enforce,
+      provides: plugin.provides,
+    };
+    for (const hook of [...commandHooks, "onAppRun", "afterAppRun"] as const) {
+      const callback = plugin[hook];
+      if (callback)
+        Object.defineProperty(runtime, hook, { value: callback.bind(plugin), enumerable: true });
+    }
+    return Object.freeze(runtime);
+  });
+  const sorted = sortPlugins(compiled);
+  const plan = new Map<keyof Plugin<State>, Plugin<State>[]>();
+  for (const hook of commandHooks) {
+    plan.set(
+      hook,
+      sorted.filter((plugin) => typeof plugin[hook] === "function"),
+    );
+  }
+  hookPlans.set(compiled, plan);
+  Object.freeze(compiled);
+  return compiled;
+}
 
 // ============================================================================
 // enforce 三档排序
@@ -45,25 +96,36 @@ function withHook<State, K extends keyof Plugin<State>>(
   plugins: Plugin<State>[],
   hook: K,
 ): Plugin<State>[] {
-  return sortPlugins(plugins).filter((p) => typeof p[hook] === "function");
+  return (
+    hookPlans.get(plugins)?.get(hook) ??
+    sortPlugins(plugins).filter((p) => typeof p[hook] === "function")
+  );
 }
 
 // ============================================================================
-// 装配期(apply)
+// 装配期(setup)
 // ============================================================================
 
 /**
- * 按注册序执行每个插件的 apply(services),让插件在路由编译前解析共享服务
- * (如 services.localState.store)并填充 provides。装配是启动的一部分:任一插件
- * 抛错即中止启动(与旧 defineAuth 在模块顶层失败同语义)。
+ * 按注册序执行每个插件的 setup(services),让插件在路由编译前解析共享服务
+ * (如 services.localState.store)并返回运行实例。任一插件装配失败即中止启动。
  */
-export async function applyPlugins<State>(
-  plugins: Plugin<State>[],
+export async function setupPlugins<State>(
+  plugins: PluginInput<State>[],
   services: Readonly<AppServices>,
-): Promise<void> {
+): Promise<Plugin<State>[]> {
+  const runtimes: Plugin<State>[] = [];
   for (const plugin of plugins) {
-    if (typeof plugin.apply === "function") await plugin.apply(services);
+    const runtime = typeof plugin.setup === "function" ? await plugin.setup(services) : plugin;
+    if (!runtime || typeof runtime.name !== "string") {
+      throw new InternalError({
+        subtype: "contract_violation",
+        message: `Plugin ${plugin.name} setup must return a runtime`,
+      });
+    }
+    runtimes.push(runtime);
   }
+  return compilePlugins(runtimes);
 }
 
 // ============================================================================
@@ -189,7 +251,7 @@ export async function observeRequest<State>(
 ): Promise<void> {
   for (const plugin of withHook(plugins, "observeRequest")) {
     try {
-      await plugin.observeRequest!(ctx, event);
+      await plugin.observeRequest!(ctx, cloneRequestEvent(event));
     } catch (error) {
       ctx.log.warn(
         `observeRequest hook failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -209,14 +271,6 @@ export async function handleUnauthorized<State>(
     if (decision && decision.action !== "decline") return decision;
   }
   return undefined;
-}
-
-function cloneRequest(request: Readonly<RequestOptions>): RequestOptions {
-  return {
-    ...request,
-    ...(request.query ? { query: { ...request.query } } : {}),
-    ...(request.headers ? { headers: { ...request.headers } } : {}),
-  };
 }
 
 /** 每个 transform 拿到上一个结构化输出；任一步返回标量都立即违反契约。 */

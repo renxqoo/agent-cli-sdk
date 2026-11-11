@@ -12,7 +12,7 @@ Read this file before implementing any CLI with `agent-cli-builder`. It reflects
 
 ## 1. Project and dependency setup
 
-Prefer modifying the user's existing project. For a new project, use TypeScript, ESM, Node.js 20+, and the repository's package manager and test stack.
+Prefer modifying the user's existing project. For a new project, use TypeScript, ESM, Node.js 26+ / Bun 1.4+, and the repository's package manager and test stack.
 
 Before installing the framework, inspect `package.json` and the lockfile:
 
@@ -27,7 +27,7 @@ A publishable business package normally includes:
   "type": "module",
   "bin": { "my-cli": "./dist/index.js" },
   "files": ["dist", "skills"],
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=26", "bun": ">=1.4" }
 }
 ```
 
@@ -109,7 +109,7 @@ const app = await defineCliApp({
   name: "my-cli",
   binName: "my-cli",
   description: "Query and manage todos",
-  // The app's one directory decision; plugins receive this local state via apply(services).
+  // The app's one directory decision; plugins receive this local state via setup(services).
   dir: join(homedir(), ".my-cli"),
   baseUrl: process.env.TODOS_API_URL ?? "https://api.example.com",
   commands: todoCommands,
@@ -136,7 +136,7 @@ Key `defineCliApp` options:
 
 | Option          | Rule                                                                                    |
 | --------------- | --------------------------------------------------------------------------------------- |
-| `dir`           | The app's one local-state root (`dir` XOR `localState`; injected via `apply(services)`) |
+| `dir`           | The app's one local-state root (`dir` XOR `localState`; injected via `setup(services)`) |
 | `name`          | Output `source`, pipe type, and Skill identity                                          |
 | `binName`       | The actual shell command; set it explicitly                                             |
 | `commands`      | Required top-level commands; use for one domain                                         |
@@ -193,7 +193,7 @@ const updateNotifier = createUpdateNotifier({
 const app = await defineCliApp({/* dir, plugins: [updateNotifier], ... */});
 ```
 
-`defineCliApp({ dir })` is the app's one directory decision. The assembler creates a single local state and injects it into every plugin through `apply(services)`. Layout: `<dir>/config/<ns>.json` (per-namespace app config), `<dir>/credentials/<ns>.json`, and `<dir>/cache/updates/`; the high-level APIs have no independent directory parameters.
+`defineCliApp({ dir })` is the app's one directory decision. The assembler creates a single local state and injects it into every plugin through `setup(services)`. Layout: `<dir>/config/<ns>.json` (per-namespace app config), `<dir>/credentials/<ns>.json`, and `<dir>/cache/updates/`; the high-level APIs have no independent directory parameters.
 
 This capability is opt-in because it adds cache writes and a throttled registry request. `NO_UPDATE_NOTIFIER=1` disables it. A Skill may recognize the system message and report it after the business task, but it must not parse it as business data or execute the suggested installation without user authorization.
 

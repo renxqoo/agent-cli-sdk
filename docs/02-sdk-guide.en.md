@@ -81,7 +81,7 @@ export default await defineCliApp<OrdersState>({
 });
 ```
 
-> `defineAuth` is a synchronous factory that returns an ordinary `Plugin` and automatically contributes the login/status/logout/register commands; `defineCliApp` runs each plugin's `apply(services)` before route compilation to complete assembly. For special protocols, hand-write a Plugin using the public building blocks — provider chain, context-keyed session, and `handleUnauthorized`; see `05-credentials.md`.
+> `defineAuth` is a synchronous factory that returns a reusable `PluginFactory` and automatically contributes the login/status/logout/register commands; `defineCliApp` runs each plugin's `setup(services)` before route compilation to complete assembly. For special protocols, hand-write a Plugin using the public building blocks — provider chain, context-keyed session, and `handleUnauthorized`; see `05-credentials.md`.
 
 **That's it.** The rest goes block by block through `ctx`, `defineCommand`, the plugin system, and auth.
 
@@ -496,11 +496,9 @@ export const ordersCommands = defineCommands({
 
 The SDK only handles the deterministic mapping from Shell tokens to an object plus Zod validation; it does not take part in business-parameter semantics. Whether the backend wants `page/pageSize` or `cursor`, the business package translates it inside `run`.
 
-### Permission checks: declarative `requiresScope` vs imperative `ctx.auth.requireScope()`
 
 | Approach                              | Usage               | Best for                                  |
 | ------------------------------------- | ------------------- | ----------------------------------------- |
-| `requiresScope` (declarative)         | command config option | **the default**. scope is fixed and static |
 | `ctx.auth.requireScope()` (imperative) | call inside run     | scope depends on runtime conditions       |
 
 Both throw an equivalent `PermissionError` (exit 3). The declarative form is clearer and lands in the docs' "permissions" column, so prefer it.
@@ -514,10 +512,14 @@ Cross-cutting concerns (auth/format/fixed parameters/error handling/audit) are i
 ### The Plugin interface
 
 ```ts
+interface PluginFactory<State = {}> {
+  name: string;
+  setup(services: Readonly<AppServices>): Plugin<State> | Promise<Plugin<State>>;
+}
+
 interface Plugin<State = {}> {
   name: string; // required: plugin name (logging/tracing)
   enforce?: "pre" | "normal" | "post";
-  apply?(services: Readonly<AppServices>): void | Promise<void>; // once at assembly time (defineCliApp calls it automatically)
   onAppRun?(event: Readonly<AppRunEvent>): void | Promise<void>; // once per app.run
   afterAppRun?(event: Readonly<AppExitEvent>): void | Promise<void>; // once at the end of each app.run
   beforeCommand?(ctx: CommandContext<State>): Promise<void>;
@@ -543,7 +545,7 @@ interface Plugin<State = {}> {
 
 | Hook                 | When it fires                              | What it can change                                     | Typical use                                      |
 | -------------------- | ------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------ |
-| `apply`              | assembly time (before route compilation)   | resolve services, fill provides, build runtime state   | assemble auth from `services.localState.store`   |
+| `setup`              | assembly time (before route compilation)   | resolve services, fill provides, build runtime state   | assemble auth from `services.localState.store`   |
 | `onAppRun`           | start of every app.run                     | observe only; failure is silently isolated             | startup metrics                                  |
 | `afterAppRun`        | end of every app.run                       | observe only; failure is silently isolated             | version-aware notification (update-notifier)     |
 | `beforeCommand`      | before the command's run                   | `ctx.state` (fill data)                                | auth fills user, argument preprocessing          |
@@ -570,7 +572,7 @@ post plugins (registration order)   ← final wrapping (signing, cleanup)
 
 Failures in observing hooks (`observeRequest` / `observeError`) only log a warning; control flow can only be changed by an explicit handle decision.
 
-The app-level hooks (`onAppRun` / `afterAppRun`) are observers that run exactly once per process run: they cover help, --version, unknown commands, and error paths; exceptions are silently isolated and cannot change the exit code or any output. They suit only operational hints that need no reliable delivery; audit, writes, or telemetry that must complete must not go here. `apply` belongs to assembly (failure = startup failure) and is run by `defineCliApp` in registration order before route compilation.
+The app-level hooks (`onAppRun` / `afterAppRun`) are observers that run exactly once per process run: they cover help, --version, unknown commands, and error paths; exceptions are silently isolated and cannot change the exit code or any output. They suit only operational hints that need no reliable delivery; audit, writes, or telemetry that must complete must not go here. `setup` belongs to assembly (failure = startup failure) and is run by `defineCliApp` in registration order before route compilation.
 
 ### beforeRequest: uniform handling of request parameters
 
@@ -671,100 +673,75 @@ Building blocks provided by agent-cli-sdk (imported from the main package `@renx
 | `defineCliApp({ dir, plugins })` / `defineCli({ plugins })`                                                              | app assembler (the single directory decision, auto-applies plugins) / low-level synchronous assembler |
 | `createLocalState({ dir })` / `createMemoryLocalState()`                                                                 | local state (includes ConfigStore; inject either dir or localState into defineCliApp)          |
 | `defaultProviders()` / `flagProvider` / `envProvider` / `fileProvider` / `oauthProvider`                                 | default providers for the provider chain                                                       |
-| `resolveWithChain(providers, pctx)` / `resolveIdentityWithChain(providers, pctx)`                                        | run the chain to obtain a token / identity                                                     |
+| `resolveWithChain(providers, pctx)`                                        | run the chain to obtain a token / identity                                                     |
 | `injectAuthHeader(req, token, style)`                                                                                    | inject the header according to authStyle (bearer/x-api-key/basic)                              |
-| `createOn401Hook({cfg, store, namespace})`                                                                               | the 401 singleflight refresh primitive (called by a Plugin's `handleUnauthorized`)             |
+| `createOAuthRefresh({cfg, store, namespace})`                                                                               | the 401 singleflight refresh primitive (called by a Plugin's `handleUnauthorized`)             |
 | `deviceAuthorization` / `pollDeviceToken` / `getUserInfo` / `revokeToken` / `registerClient`                             | OAuth 2.1 endpoint primitives (device authorization + user info/revoke/register)               |
 
 #### How to write an auth Plugin (see `createCrmAuth` in `apps/crm/src/auth.ts`)
 
-Below is a complete auth Plugin factory example. Business packages can follow this skeleton and swap the provider, header injection, or identity source. The directory/store is not a factory argument: it is obtained from the assembler via `apply(services)` (which defineCliApp runs automatically):
+Below is a complete auth Plugin factory example. Business packages can follow this skeleton and swap the provider, header injection, or identity source. The directory/store is not a factory argument: it is obtained from the assembler via `setup(services)` (which defineCliApp runs automatically):
 
 ```ts
 import {
-  type Plugin,
-  type CommandContext,
-  type ProviderContext,
-  type ConfigStore,
-  defaultProviders,
-  resolveWithChain,
-  injectAuthHeader,
-  createOn401Hook,
   AuthenticationError,
+  createOAuthRefresh,
+  defaultProviders,
+  injectAuthHeader,
+  resolveWithChain,
+  type CommandContext,
+  type OAuthClientConfig,
+  type PluginFactory,
+  type TokenResult,
 } from "@renxqoo/agent-cli-sdk";
 
-export function createCrmAuth<State extends { user?: unknown }>(opts: {
+export function createCustomAuth<State>(options: {
   namespace: string;
-  authStyle?: "bearer" | "x-api-key" | "basic";
-  oauth?: { baseUrl: string; clientId: string; clientSecret: string };
-}): Plugin<State> {
-  // assembly-time state: filled in apply from services.localState.store
-  let ready!: { store: ConfigStore; providers: ReturnType<typeof defaultProviders>; on401?: () => Promise<any> };
-  const authStyle = opts.authStyle ?? "bearer";
-  const sessions = new WeakMap<CommandContext<State>, { token: string; refreshable: boolean }>();
-
+  oauth: OAuthClientConfig;
+}): PluginFactory<State> {
   return {
-    name: `auth:${opts.namespace}`,
-    enforce: "pre",
-
-    async apply(services) {
-      const store = services.localState.store;
+    name: `auth:${options.namespace}`,
+    async setup({ localState }) {
+      const store = localState.store;
       const providers = defaultProviders();
-      // 401 singleflight refresh hook (created only when oauth is configured)
-      const on401 = opts.oauth
-        ? createOn401Hook({ cfg: opts.oauth, store, namespace: opts.namespace })
-        : undefined;
-      ready = { store, providers, on401 };
-    },
-
-    async beforeCommand(ctx) {
-      const { store, providers } = ready;
-      // ① run the provider chain to get a token (stop on first hit)
-      const pctx: ProviderContext = {
-        namespace: opts.namespace,
-        configStore: store,
-        args: {},
-        env: process.env,
+      const refresh = createOAuthRefresh({ cfg: options.oauth, store, namespace: options.namespace });
+      const sessions = new WeakMap<CommandContext<State>, TokenResult>();
+      return {
+        name: `auth:${options.namespace}`,
+        enforce: "pre",
+        async beforeCommand(ctx) {
+          const resolved = await resolveWithChain(providers, {
+            namespace: options.namespace, configStore: store, args: {}, env: process.env,
+          });
+          if (!resolved) throw new AuthenticationError({
+            subtype: "no_credentials", message: "Sign in before running this command",
+          });
+          sessions.set(ctx, resolved.token);
+        },
+        async beforeRequest(ctx, request) {
+          const prepared = { ...request, headers: { ...request.headers } };
+          const session = sessions.get(ctx);
+          if (session) injectAuthHeader(prepared, session.token, "bearer");
+          return prepared;
+        },
+        async handleUnauthorized(ctx, event) {
+          const session = sessions.get(ctx);
+          if (!session?.refreshable || !session.sessionId) return { action: "decline" };
+          const authorization = Object.entries(event.request.headers ?? {})
+            .findLast(([name]) => name.toLowerCase() === "authorization")?.[1];
+          if (!authorization?.startsWith("Bearer ")) return { action: "decline" };
+          const token = await refresh({
+            sessionId: session.sessionId,
+            token: authorization.slice("Bearer ".length),
+          });
+          if (!token) return {
+            action: "reject",
+            error: new AuthenticationError({ subtype: "token_expired", message: "Sign in again" }),
+          };
+          sessions.set(ctx, { ...session, token: token.access_token });
+          return { action: "retry" };
+        },
       };
-      const resolved = await resolveWithChain(providers, pctx);
-      if (!resolved)
-        throw new AuthenticationError({
-          subtype: "no_credentials",
-          message: "no credentials configured",
-          hint: "set the XXX_API_KEY environment variable",
-        });
-
-      // ② wrap store as ctx.credentials (the command's runtime API)
-      (ctx as any).credentials = {
-        get: async (ns: string) => store.loadCredentials(ns),
-        save: (ns: string, d: Record<string, unknown>) => store.saveCredentials(ns, d),
-        clear: (ns: string) => store.clearCredentials(ns),
-      };
-
-      sessions.set(ctx, {
-        token: resolved.token.token,
-        refreshable: resolved.token.refreshable === true,
-      });
-    },
-
-    async beforeRequest(ctx, req) {
-      const prepared = { ...req, headers: { ...req.headers } };
-      const session = sessions.get(ctx);
-      if (session) injectAuthHeader(prepared, session.token, authStyle);
-      return prepared;
-    },
-
-    async handleUnauthorized(ctx) {
-      const session = sessions.get(ctx);
-      if (!ready.on401 || !session?.refreshable) return { action: "decline" };
-      const token = await ready.on401();
-      if (!token)
-        return {
-          action: "reject",
-          error: new AuthenticationError({ subtype: "token_expired", message: "refresh failed" }),
-        };
-      sessions.set(ctx, { ...session, token });
-      return { action: "retry" };
     },
   };
 }
@@ -776,7 +753,7 @@ export function createCrmAuth<State extends { user?: unknown }>(opts: {
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `beforeCommand`      | run the provider chain to get a token; wrap `store` as `ctx.credentials`; obtain identity from the matched provider; establish a context-keyed session |
 | `beforeRequest`      | use `injectAuthHeader(req, token, authStyle)` to inject `Authorization: Bearer xxx` / `X-Api-Key: xxx` / `Authorization: Basic xxx` according to authStyle |
-| `handleUnauthorized` | call `createOn401Hook(...)`; update the context-keyed session, then explicitly return `retry`                                                          |
+| `handleUnauthorized` | call `createOAuthRefresh(...)`; update the context-keyed session, then explicitly return `retry`                                                          |
 
 **Key discipline:**
 
@@ -937,7 +914,7 @@ defineCli<State>({
 })
 ```
 
-**Auth**: `defineAuth({...})` is a synchronous factory; put its return value directly into `defineCliApp`'s `plugins` (the assembler runs `apply` automatically); hand-write a Plugin only for special protocols (see `05-credentials.md`).
+**Auth**: `defineAuth({...})` is a synchronous factory; put its return value directly into `defineCliApp`'s `plugins` (the assembler runs `setup` automatically); hand-write a Plugin only for special protocols (see `05-credentials.md`).
 
 ---
 

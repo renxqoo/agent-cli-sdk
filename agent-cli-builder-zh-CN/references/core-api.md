@@ -12,7 +12,7 @@
 
 ## 1. 项目与依赖
 
-优先改造用户现有项目。新项目使用 TypeScript、ESM、Node.js 20+，并复用仓库已有包管理器和测试工具。
+优先改造用户现有项目。新项目使用 TypeScript、ESM、Node.js 26+ / Bun 1.4+，并复用仓库已有包管理器和测试工具。
 
 安装框架前先检查 `package.json` 和 lockfile：
 
@@ -27,7 +27,7 @@
   "type": "module",
   "bin": { "my-cli": "./dist/index.js" },
   "files": ["dist", "skills"],
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=26", "bun": ">=1.4" }
 }
 ```
 
@@ -109,7 +109,7 @@ const app = await defineCliApp({
   name: "my-cli",
   binName: "my-cli",
   description: "查询和管理待办",
-  // app 只决定一次目录;插件经 apply(services) 拿到这份本地状态。
+  // app 只决定一次目录;插件经 setup(services) 拿到这份本地状态。
   dir: join(homedir(), ".my-cli"),
   baseUrl: process.env.TODOS_API_URL ?? "https://api.example.com",
   commands: todoCommands,
@@ -141,7 +141,7 @@ export default app;
 
 | 选项            | 规则                                   |
 | --------------- | -------------------------------------- |
-| `dir`           | app 唯一一次目录决策(`dir` 与 `localState` 二选一,经 `apply(services)` 注入插件) |
+| `dir`           | app 唯一一次目录决策(`dir` 与 `localState` 二选一,经 `setup(services)` 注入插件) |
 | `name`          | 输出 `source`、管道类型和 Skill 标识   |
 | `binName`       | 用户实际输入的命令名；建议显式设置     |
 | `commands`      | 顶层命令；单业务域使用，必填           |
@@ -200,7 +200,7 @@ const updateNotifier = createUpdateNotifier({
 const app = await defineCliApp({ /* dir, plugins: [updateNotifier], ... */ });
 ```
 
-`defineCliApp({ dir })` 是 app 唯一一次目录决策。装配器创建唯一 localState 并经 `apply(services)` 注入每个插件。目录布局固定为 `<dir>/config/<ns>.json`(按 namespace 的应用配置)、`<dir>/credentials/<ns>.json`、`<dir>/cache/updates/`；高层 API 不支持各自覆盖目录。
+`defineCliApp({ dir })` 是 app 唯一一次目录决策。装配器创建唯一 localState 并经 `setup(services)` 注入每个插件。目录布局固定为 `<dir>/config/<ns>.json`(按 namespace 的应用配置)、`<dir>/credentials/<ns>.json`、`<dir>/cache/updates/`；高层 API 不支持各自覆盖目录。
 
 该能力默认不启用，因为它会写缓存，并按节流策略访问 registry。`NO_UPDATE_NOTIFIER=1` 可关闭。Skill 可以识别系统消息并在业务任务完成后报告，但不得把它作为业务数据解析，也不得在未获用户授权时执行其中的安装命令。
 

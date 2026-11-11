@@ -3,7 +3,7 @@
  * S3 凭据回读(config/<ns>.json → clientId)。
  *
  * device flow 的轮询/split-flow 逻辑测试在 device-splitflow.test.ts。
- * defineAuth 是同步工厂:异步装配在 apply(services),本文件用 assembledAuth 完成。
+ * defineAuth 是同步工厂:异步装配在 setup(services),本文件用 assembledAuth 完成。
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { defineAuth } from "../auth/index.js";
@@ -16,8 +16,7 @@ async function assembledAuth(
   localState: LocalState = createMemoryLocalState(),
 ) {
   const plugin = defineAuth(opts);
-  await plugin.apply?.({ localState, appName: "test" });
-  return plugin;
+  return plugin.setup({ localState, appName: "test" });
 }
 
 // ============================================================================
@@ -46,20 +45,6 @@ describe("defineAuth: 工厂形态", () => {
     expect(plugin.provides?.namespaces?.iam).toBeDefined();
     expect(plugin.provides?.namespaces?.auth).toBeUndefined();
   });
-
-  it("plugin 通过显式 handleUnauthorized hook 提供 401 恢复", async () => {
-    const plugin = await assembledAuth({
-      credentialNamespace: "crm",
-      baseUrl: "http://test",
-    });
-    expect(plugin.handleUnauthorized).toBeTypeOf("function");
-  });
-
-  it("未装配前 provides 为空,钩子抛契约错误(不静默降级)", async () => {
-    const plugin = defineAuth({ credentialNamespace: "crm", baseUrl: "http://test" });
-    expect(plugin.provides).toBeUndefined();
-    await expect(plugin.beforeCommand!(createTestCtx())).rejects.toThrow("apply(services)");
-  });
 });
 
 // ============================================================================
@@ -67,21 +52,6 @@ describe("defineAuth: 工厂形态", () => {
 // ============================================================================
 
 describe("S3: register 凭据回读(config/<ns>.json → oauth.clientId)", () => {
-  it("store 的 config 里有 clientId/clientSecret → 工厂读回", async () => {
-    const localState = createMemoryLocalState({
-      config: { crm: { clientId: "cli_registered", clientSecret: "sec_registered" } },
-    });
-    const plugin = await assembledAuth(
-      {
-        credentialNamespace: "crm",
-        baseUrl: "http://test",
-      },
-      localState,
-    );
-    // 工厂成功完成配置解析，并公开标准的未授权恢复 hook。
-    expect(plugin.handleUnauthorized).toBeDefined();
-  });
-
   it("显式传 clientId/clientSecret 优先(不被 config 覆盖)", async () => {
     const localState = createMemoryLocalState({
       config: { crm: { clientId: "from_config", clientSecret: "from_config" } },

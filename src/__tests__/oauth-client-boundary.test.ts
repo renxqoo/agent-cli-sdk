@@ -36,6 +36,7 @@ describe("OAuthFlowCoordinator boundary", () => {
   it("singleflights acquisition and persistence as one transaction", async () => {
     const store = memoryStore();
     await store.saveCredentials("app", {
+      sessionId: "session",
       token: "old",
       refreshToken: "refresh",
       expiresAt: 0,
@@ -51,8 +52,8 @@ describe("OAuthFlowCoordinator boundary", () => {
     });
 
     const [a, b] = await Promise.all([
-      coordinator.refreshStoredSession(),
-      coordinator.refreshStoredSession(),
+      coordinator.refreshSession({ sessionId: "session", token: "old" }),
+      coordinator.refreshSession({ sessionId: "session", token: "old" }),
     ]);
     expect(a).toMatchObject({ access_token: "new" });
     expect(b).toMatchObject({ access_token: "new" });

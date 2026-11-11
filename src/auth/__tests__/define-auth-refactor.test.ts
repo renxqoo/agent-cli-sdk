@@ -156,34 +156,6 @@ describe("buildProviderChain", () => {
 });
 
 describe("buildOn401Handler", () => {
-  it("device flow(无 refresh) → 用默认 refresh_token 策略", () => {
-    const oauth = { baseUrl: "http://t", clientId: "c", clientSecret: "s" };
-    const store = memoryStore();
-    const handler = buildOn401Handler({
-      flow: { type: "device", login: vi.fn() },
-      oauth,
-      store,
-      namespace: "test",
-    });
-    expect(typeof handler).toBe("function");
-  });
-
-  it("client_credentials flow(有 refresh) → 用 flow.refresh", () => {
-    const oauth = { baseUrl: "http://t", clientId: "c", clientSecret: "s" };
-    const store = memoryStore();
-    const refreshFn = vi.fn().mockResolvedValue({
-      access_token: "AT_new",
-      expires_in: 3600,
-    });
-    const handler = buildOn401Handler({
-      flow: { type: "client_credentials", login: vi.fn(), refresh: refreshFn },
-      oauth,
-      store,
-      namespace: "test",
-    });
-    expect(typeof handler).toBe("function");
-  });
-
   it("handler 返回 null 时(refresh 失败)→ 返回 null", async () => {
     const oauth = { baseUrl: "http://t", clientId: "c", clientSecret: "s" };
     const store = memoryStore();
@@ -194,7 +166,7 @@ describe("buildOn401Handler", () => {
       store,
       namespace: "test",
     });
-    const result = await handler();
+    const result = await handler({ sessionId: "missing", token: "old" });
     expect(result).toBeNull();
   });
 
@@ -202,7 +174,11 @@ describe("buildOn401Handler", () => {
   // 并发 401 不能各自换 token(与默认 refresh_token 路径行为对齐)。
   it("BUG-12: 并发调用 handler 时 flow.refresh 只执行一次(singleflight)", async () => {
     const oauth = { baseUrl: "http://t", clientId: "c", clientSecret: "s" };
-    const store = memoryStore();
+    const store = memoryStore({
+      credentials: {
+        test: { sessionId: "session", token: "old", authMethod: "client_credentials", scopes: [] },
+      },
+    });
     let calls = 0;
     const refreshFn = vi.fn().mockImplementation(
       () =>
@@ -223,7 +199,11 @@ describe("buildOn401Handler", () => {
       namespace: "test",
     });
     // 并发 3 次
-    const results = await Promise.all([handler(), handler(), handler()]);
+    const results = await Promise.all([
+      handler({ sessionId: "session", token: "old" }),
+      handler({ sessionId: "session", token: "old" }),
+      handler({ sessionId: "session", token: "old" }),
+    ]);
     expect(refreshFn).toHaveBeenCalledTimes(1);
     // 三次拿到同一个 token(同一对象)
     expect(results.every((r) => r === results[0])).toBe(true);

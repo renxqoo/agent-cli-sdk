@@ -21,7 +21,7 @@ Prefer `defineAuth` for standard OAuth, Bearer, API key, and Basic authenticatio
 - One singleflight refresh and retry after a 401.
 - Route-specific exemption so auth commands do not require an existing login.
 
-The factory is synchronous. Async assembly (reading config, fetching metadata) happens in the plugin's `apply(services)`, which `defineCliApp` runs automatically before routing compiles:
+The factory is synchronous. Async assembly (reading config, fetching metadata) happens in the plugin's `setup(services)`, which `defineCliApp` runs automatically before routing compiles:
 
 ```ts
 import { defineCliApp, defineAuth } from "@renxqoo/agent-cli-sdk";
@@ -44,7 +44,7 @@ const app = await defineCliApp({
 });
 ```
 
-`defineAuth` is a sync factory returning a Plugin; it never returns a Promise and must not be awaited. The plugin resolves its store from `services.localState.store` inside `apply`. Low-level `defineCli` users must call `await auth.apply?.({ localState, appName })` themselves.
+`defineAuth` is a sync factory returning a PluginFactory; it never returns a Promise and must not be awaited. The plugin resolves its store from `services.localState.store` inside `setup`. Low-level `defineCli` users must call `const authRuntime = await auth.setup({ localState, appName })` themselves.
 
 Important options:
 
@@ -78,7 +78,7 @@ Important options:
 
 So the common case writes `scope` exactly once; pass explicit `clientMetadata.scope` only when registration declares a different set than authorization. Access tokens are always Bearer (RFC 6750); `x-api-key`/`basic` styles belong to custom plugins via `injectAuthHeader`.
 
-The factory takes no directory or store parameter — the local state arrives via `apply(services)` from `defineCliApp({ dir })`. Use `createMemoryLocalState` with `defineCliApp({ localState })` in tests.
+The factory takes no directory or store parameter — the local state arrives via `setup(services)` from `defineCliApp({ dir })`. Use `createMemoryLocalState` with `defineCliApp({ localState })` in tests.
 
 For client ID and secret, resolution order is:
 

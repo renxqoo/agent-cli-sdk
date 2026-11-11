@@ -6,7 +6,7 @@
  *   - authorization_code(授权码 + PKCE,RFC 6749 §4.1 + RFC 7636)—— 唯一需要用户交互的流程
  *   - client_credentials(客户端凭据,RFC 6749 §4.4)—— 服务器间的无用户流程
  *
- * 异步装配(读配置)在插件 apply(services) 里完成,defineCliApp 自动执行;
+ * 异步装配(读配置)在插件 setup(services) 里完成,defineCliApp 自动执行;
  * 同时通过 plugin.provides 自动贡献命令(login/status/logout/register)。
  * 注册 metadata(RFC 7591)按字段缺省派生:client_name ← credentialNamespace、
  * grant_types ← flow、scope ← opts.scope、token_endpoint_auth_method ← client_secret_basic;
@@ -28,7 +28,7 @@
  * 故 login 不会被"必须登录"拦截。
  */
 
-import type { Plugin, CommandGroup, CommandContext } from "../types.js";
+import type { PluginFactory, CommandGroup, CommandContext } from "../types.js";
 import { type ClientMetadata, type OAuthClientConfig } from "../oauth.js";
 import { deviceFlow } from "../flows/device.js";
 import { authCodeFlow } from "../flows/authCode.js";
@@ -41,7 +41,6 @@ import { createRegisterCommand } from "./commands/register.js";
 import type { ConfigStore } from "../credentials/index.js";
 import type { CredentialProvider } from "../credentials/types.js";
 import { credentialArgsKey } from "../context.js";
-import { InternalError } from "../errs/index.js";
 import {
   buildOn401Handler,
   buildProviderChain,
@@ -107,14 +106,16 @@ export interface DefineAuthOptions {
 /**
  * 创建 OAuth 2.1 鉴权 plugin(钩子 + 命令一捆)。
  *
- * 同步工厂:不碰任何文件/网络。异步装配在 apply(services) 完成 ——
- * `defineCliApp` 自动调用;低层用户手动 `await plugin.apply?.(services)`。
- * 未装配(或装配失败)时钩子抛 InternalError,绝不静默降级。
+ * 同步工厂:不碰任何文件/网络。异步装配在 setup(services) 完成 ——
+ * `defineCliApp` 自动调用;低层用户手动 `await plugin.setup(services)`。
+ * setup 为每个 App 返回独立的认证钩子与命令运行实例。
  *
- * @returns Plugin,塞进 defineCliApp/defineCli 的 plugins[] 即:钩子生效 + auth 命令自动挂载。
+ * @returns PluginFactory,塞进 defineCliApp 的 plugins[] 即:钩子生效 + auth 命令自动挂载。
  *          业务无需在 namespaces 里手挂 auth。
  */
-export function defineAuth<State = Record<string, never>>(opts: DefineAuthOptions): Plugin<State> {
+export function defineAuth<State = Record<string, never>>(
+  opts: DefineAuthOptions,
+): PluginFactory<State> {
   // —— 基础配置(同步) ——
   const cmdNs = opts.commandNamespace ?? "auth";
   const credNs = opts.credentialNamespace;
@@ -131,23 +132,9 @@ export function defineAuth<State = Record<string, never>>(opts: DefineAuthOption
     clientMetadata: opts.clientMetadata,
   });
 
-  // —— apply 里完成的装配(异步:读 config/<ns>.json) ——
-  let assembly: { sessions: AuthSessionManager; commands: CommandGroup } | null = null;
-  const requireAssembly = (): { sessions: AuthSessionManager; commands: CommandGroup } => {
-    if (!assembly) {
-      throw new InternalError({
-        subtype: "contract_violation",
-        message: `auth plugin (${credNs}) used before apply(services) completed`,
-      });
-    }
-    return assembly;
-  };
-
   return {
     name: `auth:${credNs}`,
-    enforce: "pre",
-
-    async apply(services) {
+    async setup(services) {
       const store = services.localState.store;
 
       // —— ① 解析 client 凭证(env → config/<ns>.json → 空)——
@@ -185,26 +172,23 @@ export function defineAuth<State = Record<string, never>>(opts: DefineAuthOption
         clientMetadata,
         redirectPort: opts.redirectPort,
       });
-      assembly = { sessions, commands };
-    },
-
-    get provides() {
-      return assembly ? { namespaces: { [cmdNs]: assembly.commands } } : undefined;
-    },
-
-    async beforeCommand(ctx: CommandContext<State>): Promise<void> {
-      const credentialArgs = (
-        ctx as CommandContext<State> & { [credentialArgsKey]?: Record<string, unknown> }
-      )[credentialArgsKey];
-      await requireAssembly().sessions.authenticate(ctx, credentialArgs);
-    },
-
-    async beforeRequest(ctx: CommandContext<State>, request) {
-      return requireAssembly().sessions.prepare(ctx, request);
-    },
-
-    async handleUnauthorized(ctx: CommandContext<State>) {
-      return requireAssembly().sessions.handleUnauthorized(ctx);
+      return {
+        name: `auth:${credNs}`,
+        enforce: "pre",
+        provides: { namespaces: { [cmdNs]: commands } },
+        async beforeCommand(ctx: CommandContext<State>) {
+          const credentialArgs = (
+            ctx as CommandContext<State> & { [credentialArgsKey]?: Record<string, unknown> }
+          )[credentialArgsKey];
+          await sessions.authenticate(ctx, credentialArgs);
+        },
+        async beforeRequest(ctx, request) {
+          return sessions.prepare(ctx, request);
+        },
+        async handleUnauthorized(ctx, event) {
+          return sessions.handleUnauthorized(ctx, event);
+        },
+      };
     },
   };
 }

@@ -17,7 +17,6 @@ import type {
 import type { IdentityHint } from "./credentials/types.js";
 import {
   hasCommandHelp,
-  matchRoute,
   MISSING_FLAG_VALUE,
   parseFrameworkArgs,
   type FrameworkArgs,
@@ -35,7 +34,7 @@ import { renderCommandHelp, renderHelp } from "./help.js";
 import { detectBinName, detectVersion } from "./package-detect.js";
 import { createPipeReader, emptyPipe } from "./pipe.js";
 import { runCommand } from "./pipeline.js";
-import { runAfterAppRun, runOnAppRun } from "./plugin.js";
+import { compilePlugins, runAfterAppRun, runOnAppRun } from "./plugin.js";
 import { qrcodeCommand } from "./qrcode.js";
 import { createFetchAdapter } from "./request.js";
 import { createBuiltinSkillsCommands } from "./skills/builtin.js";
@@ -49,6 +48,7 @@ interface CompiledApplication<State> {
   binName: string;
   defaultFormat: DefaultFormat;
   routed: RoutedCommand<State>[];
+  registry: CommandRegistry<State>;
   plugins: Plugin<State>[];
   ownedRoutes: ReadonlyMap<Plugin<State>, string[][]>;
   createState: () => State;
@@ -77,45 +77,50 @@ class CliApplicationRuntime<State> implements App {
   }
 
   async run(argv: string[]): Promise<void> {
+    let exitCode: number;
     try {
       // App-level lifecycle: onAppRun before any routing, afterAppRun after the run settles —
       // covering help/--version/unknown routes/errors alike. Both are best-effort and silent.
       await runOnAppRun(this.#compiled.plugins, { argv });
-      await this.#dispatch(argv);
+      exitCode = await this.#dispatch(argv);
     } catch (error) {
-      this.#renderFailure(error);
-    } finally {
-      await runAfterAppRun(this.#compiled.plugins, {
-        argv,
-        exitCode: Number(process.exitCode ?? 0) || 0,
-      });
+      exitCode = this.#renderFailure(error);
     }
+    await runAfterAppRun(this.#compiled.plugins, { argv, exitCode });
+    process.exitCode = exitCode;
   }
 
-  async #dispatch(argv: string[]): Promise<void> {
+  async #dispatch(argv: string[]): Promise<number> {
     const framework = parseFrameworkArgs(argv);
-    const { matched, rest } = matchRoute(framework.commandArgv, this.#compiled.routed);
-
     if (framework.leadingVersion) {
       process.stdout.write(`${this.#compiled.binName}/${detectVersion()}\n`);
-      process.exitCode = 0;
-      return;
+      return 0;
     }
 
+    if (framework.leadingHelp || framework.commandArgv.length === 0) {
+      process.stdout.write(
+        renderHelp(this.#compiled.binName, this.#compiled.description, this.#compiled.routed) +
+          "\n",
+      );
+      return 0;
+    }
+    const { matched, rest } = this.#compiled.registry.resolve(framework.commandArgv);
     if (!matched) {
-      this.#renderMissingRoute(argv, framework.leadingHelp, framework.commandArgv.length === 0);
-      return;
+      throw new errs.ValidationError({
+        subtype: "invalid_argument",
+        message: "Unknown command",
+        hint: `Run \`${this.#compiled.binName} --help\` to see available commands`,
+      });
     }
 
     if (hasCommandHelp(rest)) {
       process.stdout.write(renderCommandHelp(this.#compiled.binName, matched) + "\n");
-      process.exitCode = 0;
-      return;
+      return 0;
     }
 
-    if (matched.schema.mode === "json" && this.#renderInputDiscovery(matched, rest)) return;
+    if (matched.schema.mode === "json" && this.#renderInputDiscovery(matched, rest)) return 0;
     const pluginArgs = framework.apiKey === undefined ? undefined : { apiKey: framework.apiKey };
-    const exitCode = await this.#execute({
+    return this.#execute({
       matched,
       rawArgv: rest,
       humanReadable: resolveHumanReadable(
@@ -125,7 +130,6 @@ class CliApplicationRuntime<State> implements App {
       ),
       ...(pluginArgs ? { pluginArgs } : {}),
     });
-    process.exitCode = exitCode;
   }
 
   #renderInputDiscovery(matched: RoutedCommand<State>, argv: readonly string[]): boolean {
@@ -135,7 +139,7 @@ class CliApplicationRuntime<State> implements App {
     if (argv.length !== 1) {
       throw new errs.ValidationError({
         subtype: "invalid_argument",
-        param: argv.find((value) => value !== "--input-schema" && value !== "--input-example"),
+        param: wantsSchema ? "--input-schema" : "--input-example",
         message: "Input discovery flags cannot be combined with command input or arguments",
       });
     }
@@ -152,27 +156,7 @@ class CliApplicationRuntime<State> implements App {
       ? { schema: matched.schema.jsonSchema }
       : { example: metadata?.examples?.[0] ?? null };
     process.stdout.write(serializeSuccess(data, undefined, { source: this.#compiled.name }) + "\n");
-    process.exitCode = 0;
     return true;
-  }
-
-  #renderMissingRoute(argv: string[], leadingHelp: boolean, emptyCommand: boolean): void {
-    if (leadingHelp || emptyCommand) {
-      process.stdout.write(
-        renderHelp(this.#compiled.binName, this.#compiled.description, this.#compiled.routed) +
-          "\n",
-      );
-      process.exitCode = 0;
-      return;
-    }
-
-    const attempted =
-      argv.filter((argument) => !argument.startsWith("-")).join(" ") || argv.join(" ");
-    throw new errs.ValidationError({
-      subtype: "invalid_argument",
-      message: `Unknown command: ${attempted}`,
-      hint: `Run \`${this.#compiled.binName} --help\` to see available commands`,
-    });
   }
 
   async #execute(invocation: CommandInvocation<State>): Promise<number> {
@@ -203,14 +187,11 @@ class CliApplicationRuntime<State> implements App {
     });
   }
 
-  #renderFailure(error: unknown): void {
-    if (error instanceof errs.BareError) {
-      process.exitCode = error.exitCode;
-      return;
-    }
+  #renderFailure(error: unknown): number {
+    if (error instanceof errs.BareError) return error.exitCode;
     const cliError = toCliError(error);
     process.stderr.write(serializeError(cliError) + "\n");
-    process.exitCode = exitCodeOf(cliError.category);
+    return exitCodeOf(cliError.category);
   }
 }
 
@@ -218,7 +199,7 @@ function compileApplication<State>(options: DefineCliOptions<State>): CompiledAp
   assertRouteIdentifier(options.name, "app");
   validateErrorOnStatus(options.errorOnStatus);
 
-  const plugins = [...(options.plugins ?? [])];
+  const plugins = compilePlugins(options.plugins ?? []);
   const binName = options.binName ?? detectBinName() ?? options.name;
   const createState = resolveStateFactory(options);
   const registry = new CommandRegistry<State>();
@@ -247,6 +228,7 @@ function compileApplication<State>(options: DefineCliOptions<State>): CompiledAp
     binName,
     defaultFormat: options.defaultFormat ?? "auto",
     routed: registry.routed(),
+    registry,
     plugins,
     ownedRoutes: registry.ownedRoutes(plugins),
     createState,

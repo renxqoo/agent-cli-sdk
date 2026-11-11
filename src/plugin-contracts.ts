@@ -14,7 +14,7 @@ export interface CommandInputEvent {
 
 /**
  * Services resolved by the app assembler and handed to every plugin during the
- * assembly phase (`apply`). This is the only channel through which plugins receive
+ * assembly phase (`setup`). This is the only channel through which plugins receive
  * the app's local state — plugin factories take no directory parameters.
  */
 export interface AppServices {
@@ -48,15 +48,9 @@ export type ErrorDecision =
   | { action: "recover"; result?: CommandResult<StructuredData> };
 
 export interface Plugin<State = Record<string, never>> {
+  setup?: never;
   name: string;
   enforce?: "pre" | "normal" | "post";
-  /**
-   * Assembly-phase hook, invoked once by `defineCliApp` (or manually via `applyPlugins`)
-   * before command routing compiles. Plugins resolve shared services here — typically
-   * `services.localState.store` — and may populate `provides` and close over their
-   * runtime state. A thrown error aborts startup.
-   */
-  apply?(services: Readonly<AppServices>): void | Promise<void>;
   provides?: {
     namespaces?: Record<string, CommandGroup<State>>;
     commands?: CommandGroup<State>;
@@ -89,3 +83,11 @@ export interface Plugin<State = Record<string, never>> {
   observeError?(context: CommandContext<State>, error: unknown): Promise<void>;
   handleError?(context: CommandContext<State>, error: unknown): Promise<ErrorDecision | undefined>;
 }
+
+/** A reusable definition creates a fresh runtime for each application's services. */
+export interface PluginFactory<State = Record<string, never>> {
+  name: string;
+  setup(services: Readonly<AppServices>): Plugin<State> | Promise<Plugin<State>>;
+}
+
+export type PluginInput<State = Record<string, never>> = Plugin<State> | PluginFactory<State>;

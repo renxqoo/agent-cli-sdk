@@ -119,23 +119,6 @@ describe("authorization_code flow", () => {
     expect(browser.open).toHaveBeenCalled();
   });
 
-  it("回调返回 error → 抛 AuthenticationError", async () => {
-    callbackRef.code = null;
-    callbackRef.error = "access_denied";
-
-    const { authCodeFlow } = await import("../flows/authCode.js");
-    const cfg = { baseUrl: "http://test", clientId: "cid", clientSecret: "csec" };
-
-    await expect(
-      authCodeFlow.login({
-        type: "authorization_code",
-        cfg,
-        browser: { open: vi.fn().mockResolvedValue(undefined) },
-        log: { info: vi.fn() },
-      }),
-    ).rejects.toThrow(/access_denied/);
-  });
-
   it("L12: 回调返回 error → subtype 为 token_expired(非 token_revoked)", async () => {
     callbackRef.code = null;
     callbackRef.error = "access_denied";
@@ -148,7 +131,10 @@ describe("authorization_code flow", () => {
         browser: { open: vi.fn().mockResolvedValue(undefined) },
         log: { info: vi.fn() },
       }),
-    ).rejects.toMatchObject({ subtype: "token_expired" });
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("access_denied"),
+      subtype: "token_expired",
+    });
   });
 });
 

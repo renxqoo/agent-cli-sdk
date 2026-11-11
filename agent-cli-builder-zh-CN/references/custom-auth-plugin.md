@@ -29,109 +29,71 @@ auth Plugin 就是一个普通的 `Plugin` 对象,用 agent-cli-sdk 导出的基
 ## 1. 手写 auth Plugin 骨架
 
 ```ts
-// src/auth.ts
 import {
-  type Plugin,
-  type CommandContext,
-  type ProviderContext,
-  type ConfigStore,
-  defaultProviders,
-  resolveWithChain,
-  injectAuthHeader,
-  createOn401Hook,
   AuthenticationError,
+  createOAuthRefresh,
+  defaultProviders,
+  injectAuthHeader,
+  resolveWithChain,
+  type CommandContext,
+  type OAuthClientConfig,
+  type PluginFactory,
+  type TokenResult,
 } from "@renxqoo/agent-cli-sdk";
 
-export function createMyAuth<State extends { user?: unknown }>(opts: {
+export function createCustomAuth<State>(options: {
   namespace: string;
-  authStyle?: "bearer" | "x-api-key" | "basic";
-  oauth?: { baseUrl: string; clientId: string; clientSecret: string };
-}): Plugin<State> {
-  const authStyle = opts.authStyle ?? "bearer";
-  const sessions = new WeakMap<CommandContext<State>, { token: string; refreshable: boolean }>();
-
-  // 装配期状态:apply 里从 services.localState.store 解析后填入(工厂不收目录/store 参数)。
-  let ready!: {
-    store: ConfigStore;
-    providers: ReturnType<typeof defaultProviders>;
-    refresh?: () => Promise<Record<string, unknown> | null>;
-  };
-
+  oauth: OAuthClientConfig;
+}): PluginFactory<State> {
   return {
-    name: `auth:${opts.namespace}`,
-    enforce: "pre", // 鉴权必须 pre,先填 token 再发请求
-
-    async apply(services) {
-      const store = services.localState.store;
-      ready = {
-        store,
-        providers: defaultProviders(),
-        refresh: opts.oauth
-          ? createOn401Hook({ cfg: opts.oauth, store, namespace: opts.namespace })
-          : undefined,
+    name: `auth:${options.namespace}`,
+    async setup({ localState }) {
+      const store = localState.store;
+      const providers = defaultProviders();
+      const refresh = createOAuthRefresh({ cfg: options.oauth, store, namespace: options.namespace });
+      const sessions = new WeakMap<CommandContext<State>, TokenResult>();
+      return {
+        name: `auth:${options.namespace}`,
+        enforce: "pre",
+        async beforeCommand(ctx) {
+          const resolved = await resolveWithChain(providers, {
+            namespace: options.namespace, configStore: store, args: {}, env: process.env,
+          });
+          if (!resolved) throw new AuthenticationError({
+            subtype: "no_credentials", message: "Sign in before running this command",
+          });
+          sessions.set(ctx, resolved.token);
+        },
+        async beforeRequest(ctx, request) {
+          const prepared = { ...request, headers: { ...request.headers } };
+          const session = sessions.get(ctx);
+          if (session) injectAuthHeader(prepared, session.token, "bearer");
+          return prepared;
+        },
+        async handleUnauthorized(ctx, event) {
+          const session = sessions.get(ctx);
+          if (!session?.refreshable || !session.sessionId) return { action: "decline" };
+          const authorization = Object.entries(event.request.headers ?? {})
+            .findLast(([name]) => name.toLowerCase() === "authorization")?.[1];
+          if (!authorization?.startsWith("Bearer ")) return { action: "decline" };
+          const token = await refresh({
+            sessionId: session.sessionId,
+            token: authorization.slice("Bearer ".length),
+          });
+          if (!token) return {
+            action: "reject",
+            error: new AuthenticationError({ subtype: "token_expired", message: "Sign in again" }),
+          };
+          sessions.set(ctx, { ...session, token: token.access_token });
+          return { action: "retry" };
+        },
       };
-    },
-
-    async beforeCommand(ctx: CommandContext<State>) {
-      const { store, providers } = ready;
-      const pctx: ProviderContext = {
-        namespace: opts.namespace,
-        configStore: store,
-        args: {},
-        env: process.env,
-      };
-      const resolved = await resolveWithChain(providers, pctx);
-      if (!resolved) {
-        throw new AuthenticationError({
-          subtype: "no_credentials",
-          message: `${opts.namespace} 未配置凭证`,
-          hint: `设置 \${opts.namespace.toUpperCase()}_API_KEY 环境变量或运行 \`my-cli auth login\``,
-        });
-      }
-
-      // 把 store 包装成 ctx.credentials(命令运行时 API)
-      (ctx as { credentials: typeof ctx.credentials }).credentials = {
-        get: async (ns) => (await store.loadCredentials(ns)) as Record<string, string> | null,
-        save: (ns, d) => store.saveCredentials(ns, d),
-        clear: (ns) => store.clearCredentials(ns),
-      };
-
-      sessions.set(ctx, {
-        token: resolved.token.token,
-        refreshable: resolved.token.refreshable === true,
-      });
-    },
-
-    async beforeRequest(ctx, req) {
-      const prepared = { ...req, headers: { ...req.headers } };
-      const session = sessions.get(ctx);
-      if (session) injectAuthHeader(prepared, session.token, authStyle);
-      return prepared;
-    },
-
-    async handleUnauthorized(ctx) {
-      const session = sessions.get(ctx);
-      if (!ready.refresh || !session?.refreshable) return { action: "decline" };
-      const token = await ready.refresh();
-      if (!token) {
-        return {
-          action: "reject",
-          error: new AuthenticationError({
-            subtype: "token_expired",
-            code: 401,
-            message: "认证已过期且刷新失败",
-            hint: "请重新登录",
-          }),
-        };
-      }
-      sessions.set(ctx, { ...session, token });
-      return { action: "retry" };
     },
   };
 }
 ```
 
-用法(`defineCliApp` 自动执行 apply):
+用法(`defineCliApp` 自动执行 setup):
 
 ```ts
 // src/index.ts
@@ -233,7 +195,6 @@ export interface CredentialProvider {
   name(): string; // provider 名(日志/溯源)
   priority?(): number; // 优先级,小值先试,默认 10
   resolveToken(pctx: ProviderContext): Promise<TokenResult | null>; // null = 没有,chain 继续
-  resolveIdentity?(pctx: ProviderContext): Promise<IdentityHint | null>; // 可选:填统一输出格式顶层的 user/bot
 }
 
 export interface ProviderContext {
@@ -325,7 +286,7 @@ defineCli({
 **业务包不处理 401**,agent-cli-sdk 请求层自动:
 
 1. 收到 401 → 调公开的 `handleUnauthorized` hook
-2. hook 用 `createOn401Hook({ cfg, store, namespace })` 创建,内部:
+2. hook 用 `createOAuthRefresh({ cfg, store, namespace })` 创建,内部:
    - 读当前凭证拿 refreshToken
    - 用 singleflight(同一 refreshToken 复用同一个 refresh Promise,避免并发重复 refresh)
    - 续期成功后**落盘**

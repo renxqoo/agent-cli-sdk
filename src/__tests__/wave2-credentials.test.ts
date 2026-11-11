@@ -2,11 +2,11 @@
  * Wave 2 regression tests — credentials subsystem:
  *   B3  — credential/config files parsed with the strict bounded parser
  *   B4  — stale .tmp files swept on fileStore construction
- *   B5  — withLock serializes read-modify-write across store instances
+ *   B5  — transactCredentials serializes read-modify-write across store instances
  *   C11 — reads tolerate a missing dir and validate namespace before any side effect
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileStore, memoryStore } from "../credentials/config-store.js";
@@ -67,31 +67,34 @@ describe("B3: fileStore loadCredentials rejects a malformed credential file", ()
 // B4: stale .tmp files swept on construction
 // ---------------------------------------------------------------------------
 
-describe("B4: fileStore sweeps stale .tmp files on construction", () => {
-  it("removes leftover .tmp files in credentials and config", () => {
+describe("temporary credential writes", () => {
+  it("preserves live and unrelated temporary files and recovers dead owned writes", async () => {
     const dir = tempDir();
-    // pre-create the dir layout + stale temps before constructing the store
     const credsDir = join(dir, "credentials");
     const configDir = join(dir, "config");
     mkdirSync(credsDir, { recursive: true });
     mkdirSync(configDir, { recursive: true });
-    writeFileSync(join(credsDir, "orders.json.123.abc.tmp"), "secret-leak");
-    writeFileSync(join(configDir, "crm.json.456.def.tmp"), "leak");
-    // sanity
-    expect(existsSync(join(credsDir, "orders.json.123.abc.tmp"))).toBe(true);
-
-    fileStore({ dir }); // construction sweeps
-
-    const remaining = readdirSync(credsDir).concat(readdirSync(configDir));
-    expect(remaining.some((f) => f.endsWith(".tmp"))).toBe(false);
+    const id = "00000000-0000-4000-8000-000000000000";
+    const live = join(credsDir, `orders.json.${process.pid}.${id}.tmp`);
+    const dead = join(credsDir, `orders.json.99999999.${id}.tmp`);
+    const unrelated = join(configDir, "user.tmp");
+    writeFileSync(live, "live");
+    writeFileSync(dead, "dead");
+    writeFileSync(unrelated, "user");
+    const store = fileStore({ dir });
+    expect(existsSync(dead)).toBe(true);
+    await store.saveCredentials("orders", { token: "new" });
+    expect(existsSync(live)).toBe(true);
+    expect(existsSync(unrelated)).toBe(true);
+    expect(existsSync(dead)).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// B5: withLock serializes read-modify-write
+// B5: transactCredentials serializes read-modify-write
 // ---------------------------------------------------------------------------
 
-describe("B5: withLock serializes the refresh transaction", () => {
+describe("B5: transactCredentials serializes the refresh transaction", () => {
   it("two store instances on the same dir never overlap (cross-process model)", async () => {
     const dir = tempDir();
     const storeA = fileStore({ dir });
@@ -100,7 +103,7 @@ describe("B5: withLock serializes the refresh transaction", () => {
     let active = 0;
     let maxOverlap = 0;
     const txn = async (store: ReturnType<typeof fileStore>) =>
-      store.withLock("orders", async () => {
+      store.transactCredentials("orders", async () => {
         active++;
         maxOverlap = Math.max(maxOverlap, active);
         await new Promise((r) => setTimeout(r, 20));
@@ -111,19 +114,19 @@ describe("B5: withLock serializes the refresh transaction", () => {
     expect(maxOverlap).toBe(1); // serialized, never concurrent
   });
 
-  it("withLock rejects an invalid namespace before locking", async () => {
+  it("transactCredentials rejects an invalid namespace before locking", async () => {
     const store = fileStore({ dir: tempDir() });
-    await expect(store.withLock("../escape", async () => 1)).rejects.toMatchObject({
+    await expect(store.transactCredentials("../escape", async () => 1)).rejects.toMatchObject({
       subtype: "invalid_config",
     });
   });
 
-  it("memoryStore.withLock serializes in-process", async () => {
+  it("memoryStore.transactCredentials serializes in-process", async () => {
     const store = memoryStore();
     let active = 0;
     let maxOverlap = 0;
     const txn = () =>
-      store.withLock("orders", async () => {
+      store.transactCredentials("orders", async () => {
         active++;
         maxOverlap = Math.max(maxOverlap, active);
         await new Promise((r) => setTimeout(r, 10));
@@ -174,15 +177,17 @@ describe("C11: read paths have no filesystem side effects", () => {
 // ---------------------------------------------------------------------------
 
 describe("fileStore lockTimeoutMs option", () => {
-  it("a contended withLock rejects once lockTimeoutMs elapses", async () => {
+  it("a contended transactCredentials rejects once lockTimeoutMs elapses", async () => {
     const dir = tempDir();
     const storeA = fileStore({ dir });
     const storeB = fileStore({ dir, lockTimeoutMs: 100 });
     let releaseA!: () => void;
-    const holdA = storeA.withLock("ns", () => new Promise<void>((r) => (releaseA = r)));
+    const holdA = storeA.transactCredentials("ns", () => new Promise<void>((r) => (releaseA = r)));
     await new Promise((r) => setTimeout(r, 30)); // let A acquire the lock
 
-    await expect(storeB.withLock("ns", async () => "x")).rejects.toThrow(/lock|acquire/i);
+    await expect(storeB.transactCredentials("ns", async () => "x")).rejects.toThrow(
+      /lock|acquire/i,
+    );
 
     releaseA();
     await holdA;

@@ -9,6 +9,7 @@ import {
   type TokenInfo,
 } from "../oauth.js";
 import { defaultProviders, type ConfigStore } from "../credentials/index.js";
+import type { OAuthSessionRef } from "../credentials/types.js";
 import type { CredentialProvider } from "../credentials/types.js";
 import type { AuthFlow, FlowType } from "../flows/types.js";
 import { OAuthFlowCoordinator } from "./flow-coordinator.js";
@@ -132,7 +133,9 @@ export interface BuildOn401Input {
   scope?: string;
 }
 
-export function buildOn401Handler(input: BuildOn401Input): () => Promise<TokenInfo | null> {
+export function buildOn401Handler(
+  input: BuildOn401Input,
+): (session: OAuthSessionRef) => Promise<TokenInfo | null> {
   const { flow, oauth, store, namespace, scope } = input;
   const coordinator = new OAuthFlowCoordinator({
     store,
@@ -155,5 +158,5 @@ export function buildOn401Handler(input: BuildOn401Input): () => Promise<TokenIn
           acquire: (ctx) => new OAuthClient(oauth).refresh(ctx.refreshToken!),
         },
   });
-  return coordinator.refreshStoredSession;
+  return coordinator.refreshSession;
 }

@@ -1,12 +1,11 @@
 /**
- * installer 插件测试 —— 测纯函数部分(formatInstallMessage/isOlderVersion/detectBizPackage)+
+ * installer 插件测试 —— 测纯函数部分(formatInstallMessage/isOlderVersion)+
  * install 命令的装配行为(skipPluginHooks、rawText/BareError 退出码、--lang 透传)。
  * 真实 npm/网络/clack 交互靠手动冒烟,不在此单测。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { formatInstallMessage, isOlderVersion } from "../install-workflow.js";
 import { defineInstaller, type DefineInstallerOptions } from "../installer.js";
-import { detectBizPackage } from "../define.js";
 import { createLocalState, createMemoryLocalState } from "../local-state.js";
 import { createTestCtx } from "../test-utils.js";
 import { join } from "node:path";
@@ -51,25 +50,6 @@ describe("isOlderVersion: 版本比较", () => {
   });
 });
 
-describe("detectBizPackage: 业务包探测", () => {
-  it("在 agent-cli-sdk 测试上下文里要么探测到业务包,要么返回 null(不崩)", () => {
-    // 测试跑在 vitest 进程里,process.argv[1] 是 vitest,往上找可能找不到带 bin 的业务包
-    // 关键是不崩、返回结构正确
-    const result = detectBizPackage();
-    if (result) {
-      expect(result).toHaveProperty("name");
-      expect(result).toHaveProperty("bin");
-      expect(result).toHaveProperty("version");
-      expect(typeof result.name).toBe("string");
-      expect(typeof result.bin).toBe("string");
-      // agent-cli-sdk 自己应被跳过
-      expect(result.name).not.toBe("@renxqoo/agent-cli-sdk");
-    } else {
-      expect(result).toBeNull();
-    }
-  });
-});
-
 // ============================================================================
 // I1: installer 插件提供顶层 install 命令,不自行 process.exit
 // ============================================================================
@@ -102,8 +82,7 @@ describe("I1: installer 提供 install 命令,不自行 process.exit", () => {
 
   async function assembledInstaller(options: DefineInstallerOptions = {}) {
     const plugin = defineInstaller(options);
-    await plugin.apply?.({ localState, appName: "test" });
-    return plugin;
+    return plugin.setup({ localState, appName: "test" });
   }
 
   beforeEach(() => {
@@ -176,7 +155,7 @@ describe("I1: installer 提供 install 命令,不自行 process.exit", () => {
   it("memory 本地状态不可用于 installer(明确报错,不静默降级)", async () => {
     const plugin = defineInstaller();
     await expect(
-      plugin.apply?.({
+      plugin.setup({
         localState: createMemoryLocalState(),
         appName: "test",
       }),

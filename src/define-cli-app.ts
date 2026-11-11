@@ -16,13 +16,14 @@
  * })
  * ```
  *
- * 流程:createLocalState({dir}) → 冻结 AppServices → 按注册序 applyPlugins
- * (插件在 apply 里解析 services、填充 provides;失败 = 启动失败)→ defineCli。
+ * 流程:createLocalState({dir}) → 冻结 AppServices → 按注册序 setupPlugins
+ * (插件在 setup 里解析 services、填充 provides;失败 = 启动失败)→ defineCli。
  */
 
 import { defineCli } from "./define.js";
 import { createLocalState, type LocalState } from "./local-state.js";
-import { applyPlugins } from "./plugin.js";
+import { setupPlugins } from "./plugin.js";
+import type { PluginInput } from "./plugin-contracts.js";
 import type { AppServices } from "./plugin-contracts.js";
 import type { App, DefineCliOptions } from "./types.js";
 
@@ -31,10 +32,12 @@ export type DefineCliAppState =
   | { dir: string; localState?: undefined }
   | { localState: LocalState; dir?: undefined };
 
-export type DefineCliAppOptions<State> = DefineCliOptions<State> & DefineCliAppState;
+export type DefineCliAppOptions<State> = Omit<DefineCliOptions<State>, "plugins"> & {
+  plugins?: PluginInput<State>[];
+} & DefineCliAppState;
 
 /**
- * 装配并编译一个 CLI app。异步:插件的 apply 可能读配置/发网络请求(如 defineAuth)。
+ * 装配并编译一个 CLI app。异步:插件的 setup 可能读配置/发网络请求(如 defineAuth)。
  * 任一插件装配失败则 reject —— 与旧版"模块顶层 await defineAuth 失败"同语义。
  */
 export async function defineCliApp<State = Record<string, never>>(
@@ -51,7 +54,7 @@ export async function defineCliApp<State = Record<string, never>>(
     ...(cliOptions.binName !== undefined ? { binName: cliOptions.binName } : {}),
   });
 
-  await applyPlugins(cliOptions.plugins ?? [], services);
+  const plugins = await setupPlugins(cliOptions.plugins ?? [], services);
   // DefineCliOptions 的 createState 是分布式条件类型,无法穿透 Omit;此 cast 仅恢复其形状。
-  return defineCli(cliOptions as DefineCliOptions<State>);
+  return defineCli({ ...cliOptions, plugins } as DefineCliOptions<State>);
 }

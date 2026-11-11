@@ -84,23 +84,6 @@ export function parseFrameworkArgs(argv: string[]): FrameworkArgs {
   return { commandArgv, format, apiKey, leadingHelp, leadingVersion };
 }
 
-/** 命令路径必须是去掉框架参数后的 argv 前缀；优先匹配最长路径。 */
-export function matchRoute<State>(
-  argv: string[],
-  routed: RoutedCommand<State>[],
-): MatchResult<State> {
-  const sorted = [...routed].sort((a, b) => b.route.length - a.route.length);
-  for (const candidate of sorted) {
-    if (
-      argv.length >= candidate.route.length &&
-      candidate.route.every((segment, index) => argv[index] === segment)
-    ) {
-      return { matched: candidate, rest: argv.slice(candidate.route.length) };
-    }
-  }
-  return { matched: null, rest: argv };
-}
-
 export function hasCommandHelp(argv: string[]): boolean {
   const separator = argv.indexOf("--");
   const searchable = separator < 0 ? argv : argv.slice(0, separator);

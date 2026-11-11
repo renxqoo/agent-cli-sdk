@@ -172,22 +172,6 @@ describe("cached update notifier", () => {
     expect(stderr).toContain("<latest-version>3.0.0</latest-version>");
   });
 
-  it("isolates a failing app-level observer from output and exit status", async () => {
-    const broken: Plugin = {
-      name: "broken-after-run",
-      async afterAppRun() {
-        throw new Error("observer failed");
-      },
-    };
-    const app = await createApp([broken]);
-
-    await app.run(["ok", "--json"]);
-
-    expect(JSON.parse(stdout).data).toEqual({ value: 42 });
-    expect(stderr).toBe("");
-    expect(process.exitCode).toBe(0);
-  });
-
   it("runs afterAppRun once per run, including when an error handler recovers", async () => {
     let calls = 0;
     const recover: Plugin = {

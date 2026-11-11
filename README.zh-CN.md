@@ -5,7 +5,7 @@
 > **一个面向 agent 的 CLI「skill 工厂」。** 装一个 skill,让 AI agent 把你的任何公司 API 变成一个 CLI _和_ 一个 agent skill —— 鉴权、统一输出、类型化错误、渐进披露全包。作者只写「调哪个接口、字段怎么映射」。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/node-%3E%3D26-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml)
 
 ---
@@ -62,7 +62,7 @@ acme skills sync              # ~/.agents + 探测到的 ~/.claude/.codex/.curso
 
 ## 安装
 
-要求 **Node.js >= 20**。本包是 ESM-only(`import` / 动态 `import()`;不支持 CommonJS `require()`)。
+要求 **Node.js >= 26 / Bun >= 1.4**。本包是 ESM-only(`import` / 动态 `import()`;不支持 CommonJS `require()`)。
 
 ```bash
 npm install @renxqoo/agent-cli-sdk
@@ -126,7 +126,7 @@ import { join } from "node:path";
 
 export default await defineCliApp({
   name: "orders",
-  // 唯一的目录决策点;装配器通过 apply(services) 分发给每个有状态插件
+  // 唯一的目录决策点;装配器通过 setup(services) 分发给每个有状态插件
   dir: join(homedir(), ".orders"),
   plugins: [
     defineAuth({
@@ -312,3 +312,7 @@ pnpm test:package # npm tarball 冒烟测试
 ## License
 
 [MIT](LICENSE) © [renxqoo](https://github.com/renxqoo)
+
+## 运行时迁移
+
+支持 Node.js 26+ 和 Bun 1.4+。有状态插件通过 PluginFactory.setup 为每个 App 返回独立运行实例。接口变更和并发语义见[运行时迁移说明](docs/08-runtime-refactor.md)。

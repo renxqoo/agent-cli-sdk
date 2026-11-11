@@ -170,26 +170,6 @@ describe("pipeline: explicit error handling", () => {
     expect(env.error.hint).toBe("用 list 查有效 ID");
   });
 
-  it("handleError requires an explicit recovery decision", async () => {
-    const fallback: Plugin = {
-      name: "fallback",
-      async handleError() {
-        return { action: "recover", result: { data: { cached: true } } };
-      },
-    };
-    const ctx = createTestCtx({ request: async () => ({ status: 404, data: {}, headers: {} }) });
-    const code = await runCommand({
-      spec: getCommand,
-      args: { id: "x" },
-      ctx,
-      plugins: [fallback],
-    });
-    expect(code).toBe(0);
-    const env = JSON.parse(stdoutBuf);
-    expect(env.ok).toBe(true);
-    expect(env.data).toEqual({ cached: true });
-  });
-
   it("a failed error handler preserves the original structured error", async () => {
     const brokenHook: Plugin = {
       name: "broken-error-hook",

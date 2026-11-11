@@ -3,7 +3,7 @@
  *
  * 这是原先最大的覆盖缺口(define.ts 此前零测试),集中验证 S2/S4/H1/H5/M1/M2/M9/M10。
  */
-import { describe, it, expect, expectTypeOf, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineCli, defineCommand, errs } from "../index.js";
 import type { CommandSpec } from "../types.js";
 import * as z from "zod";
@@ -40,28 +40,6 @@ function parseStdout() {
 function parseStderr() {
   return JSON.parse(stderrBuf.trim());
 }
-
-describe("schema-first command typing", () => {
-  it("keeps optional flags optional and required/default flags present", () => {
-    defineCommand({
-      name: "typed",
-      description: "typed",
-      args: {
-        schema: z.object({
-          query: z.string().optional(),
-          limit: z.coerce.number().default(20),
-          id: z.string(),
-        }),
-      },
-      async run(_ctx, args) {
-        expectTypeOf(args.query).toEqualTypeOf<string | undefined>();
-        expectTypeOf(args.limit).toEqualTypeOf<number>();
-        expectTypeOf(args.id).toEqualTypeOf<string>();
-        return { data: args };
-      },
-    });
-  });
-});
 
 // ============================================================================
 // S2: defineCli 不传 plugins 时不应崩溃
@@ -418,6 +396,7 @@ describe("M9: defineCli.run 的 catch 处理 BareError", () => {
     await app.run(["check"]);
     // BareError(7) 应保留 exit 7,而非被 toCliError 包成 InternalError → exit 5
     expect(process.exitCode).toBe(7);
+    expect(stderrBuf).toBe("");
   });
 });
 
@@ -426,47 +405,6 @@ describe("M9: defineCli.run 的 catch 处理 BareError", () => {
 // ============================================================================
 
 describe("M10: -- 分隔符之后全为 positional", () => {
-  it("echo -- --help → --help 被当 positional,不触发帮助", async () => {
-    let capturedPos: string[] = [];
-    let showedHelp = false;
-    const app = defineCli({
-      name: "demo",
-      description: "demo",
-      commands: {
-        echo: defineCommand({
-          name: "echo",
-          description: "echo",
-          // 接收多余位置参数(无 args spec,run 内读不到,靠校验报错反推)
-          async run() {
-            return { data: { ok: true } };
-          },
-        }),
-      },
-    });
-    // 重新写一个能捕获 positionals 的命令:用单个 positional
-    const app2 = defineCli({
-      name: "demo",
-      description: "demo",
-      commands: {
-        echo: defineCommand({
-          name: "echo",
-          description: "echo",
-          args: { schema: z.object({ msg: z.string().optional() }), pos: ["msg"] },
-          async run(_ctx, args) {
-            capturedPos = [(args as { msg?: string }).msg ?? ""];
-            return { data: { ok: true } };
-          },
-        }),
-      },
-    });
-    // -- 之后的 --weird 必须当 positional 而非 flag
-    await app2.run(["echo", "--", "--weird"]);
-    expect(capturedPos).toEqual(["--weird"]);
-    expect(showedHelp).toBe(false);
-    // 验证没有触发帮助(--help 在 -- 之后不该当 flag)
-    void app;
-  });
-
   it("-- 之前的 flag 仍按 flag 解析,之后的全为 positional", async () => {
     let capturedMsg = "";
     let capturedVerbose = "not-set";

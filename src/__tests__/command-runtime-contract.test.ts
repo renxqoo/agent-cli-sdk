@@ -79,7 +79,7 @@ describe("explicit error decisions", () => {
     });
 
     expect(code).toBe(0);
-    expect(JSON.parse(stdout).data).toEqual({ cached: true });
+    expect(JSON.parse(stdout)).toMatchObject({ ok: true, data: { cached: true } });
     expect(stderr).toBe("");
   });
 });

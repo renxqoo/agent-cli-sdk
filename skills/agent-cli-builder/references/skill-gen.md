@@ -129,7 +129,7 @@ defineCli({
 });
 ```
 
-`defineInstaller({ skillsSource })` (a plugin in `defineCliApp`'s `plugins`) provides the top-level `install` command; it uses local `<bin> skills sync` when `skillsSource` is empty and tries `npx skills add <url>` with local fallback when set. The local state comes from `defineCliApp({ dir })` via `apply(services)` — the installer takes no directory parameter. `defineCli({ skillsSource })` does not forward the value to the wizard; pass it explicitly to `defineInstaller`.
+`defineInstaller({ skillsSource })` (a plugin in `defineCliApp`'s `plugins`) provides the top-level `install` command; it uses local `<bin> skills sync` when `skillsSource` is empty and tries `npx skills add <url>` with local fallback when set. The local state comes from `defineCliApp({ dir })` via `setup(services)` — the installer takes no directory parameter. `defineCli({ skillsSource })` does not forward the value to the wizard; pass it explicitly to `defineInstaller`.
 
 The wizard may create a global package, Skill files, configuration, and credentials. Disclose those effects in agent-facing installation instructions.
 

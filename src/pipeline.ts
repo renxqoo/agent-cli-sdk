@@ -19,7 +19,7 @@ import {
   runBeforeCommand,
   transformOutput,
 } from "./plugin.js";
-import { credentialArgsKey, idempotencyKey } from "./context.js";
+import { credentialArgsKey, idempotencyKey, readOnlyRequestKey } from "./context.js";
 import { isRawTextResult, isStructuredData } from "./output.js";
 import { commandExecutionKey, type ResolvedCommandArgs } from "./command-schema.js";
 import type { CommandSchemaMetadata } from "./command-contracts.js";
@@ -61,21 +61,37 @@ export async function runCommand<State>(options: RunCommandOptions<State>): Prom
       ] = options.pluginArgs;
     }
 
+    const invocation = args as ResolvedCommandArgs;
+    const execution = invocation[commandExecutionKey];
+    if (execution?.dryRun) {
+      (ctx as CommandContext<State> & { [readOnlyRequestKey]?: boolean })[readOnlyRequestKey] =
+        true;
+    }
+    if (
+      spec.policy?.mode === "write" &&
+      spec.policy.confirmation === "required" &&
+      !execution?.dryRun &&
+      !execution?.confirmed
+    ) {
+      throw new ConfirmationRequiredError({
+        subtype: "high_risk_write",
+        message: `${options.route.join(" ")} is a write operation and requires confirmation`,
+        hint: execution?.json
+          ? `Review input ${execution.json.validatedDigest}, then add --yes.`
+          : "Review the arguments, then add --yes.",
+      });
+    }
     if (!spec.skipPluginHooks) {
       await runBeforeCommand(plugins, ctx, options.route, options.ownedRoutes);
     }
-
-    const invocation = args as ResolvedCommandArgs;
-    const execution = invocation[commandExecutionKey];
     const metadata = spec.args
       ? (z.globalRegistry.get(spec.args.schema) as CommandSchemaMetadata | undefined)
       : undefined;
-    const redactedArgs = redactArgs(args, metadata?.sensitive);
     if (execution?.json) {
       await observeInput(plugins, ctx, {
         route: options.route,
         meta: execution.json,
-        redactedArgs,
+        redactedArgs: redactArgs(args, metadata?.sensitive),
       });
     }
     const policy = spec.policy;
@@ -93,7 +109,7 @@ export async function runCommand<State>(options: RunCommandOptions<State>): Prom
           typeof policy.dryRun === "object" && policy.dryRun.preview
             ? await policy.dryRun.preview(args, readOnlyContext(ctx))
             : {
-                data: { args: redactedArgs },
+                data: { args: redactArgs(args, metadata?.sensitive) },
                 ...(execution.json
                   ? { meta: { inputDigest: execution.json.validatedDigest } }
                   : {}),
@@ -103,15 +119,6 @@ export async function runCommand<State>(options: RunCommandOptions<State>): Prom
           humanReadable: options.humanReadable,
           source: options.source,
           dryRun: true,
-        });
-      }
-      if (policy.confirmation === "required" && !execution?.confirmed) {
-        throw new ConfirmationRequiredError({
-          subtype: "high_risk_write",
-          message: `${options.route.join(" ")} is a write operation and requires confirmation`,
-          hint: execution?.json
-            ? `Review input ${execution.json.validatedDigest}, then add --yes.`
-            : "Review the arguments, then add --yes.",
         });
       }
     }
@@ -219,6 +226,7 @@ function readOnlyContext<State>(ctx: CommandContext<State>): CommandContext<Stat
   };
   return {
     ...ctx,
+    credentials: { ...ctx.credentials, save: blocked, clear: blocked },
     request: (request) => (request.method === "GET" ? ctx.request(request) : blocked()),
     post: blocked,
     put: blocked,

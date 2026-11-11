@@ -12,105 +12,82 @@ Use this only when `defineAuth` cannot express the protocol, such as HMAC, mTLS,
 
 ## 1. Auth plugin skeleton
 
-An auth plugin resolves a token in `beforeCommand`, stores it in a context-keyed `WeakMap`, injects it in `beforeRequest`, and may implement `handleUnauthorized` for one refresh and retry. Never keep one mutable token directly in a plugin closure: one plugin instance serves concurrent `App.run()` calls. The store comes from `apply(services)` — factories take no directory or state parameters:
+An auth plugin resolves a token in `beforeCommand`, stores it in a context-keyed `WeakMap`, injects it in `beforeRequest`, and may implement `handleUnauthorized` for one refresh and retry. Never keep one mutable token directly in a plugin closure: one plugin instance serves concurrent `App.run()` calls. The store comes from `setup(services)` — factories take no directory or state parameters:
 
 ```ts
 import {
   AuthenticationError,
-  createOn401Hook,
+  createOAuthRefresh,
   defaultProviders,
   injectAuthHeader,
   resolveWithChain,
   type CommandContext,
-  type ConfigStore,
-  type Plugin,
-  type ProviderContext,
+  type OAuthClientConfig,
+  type PluginFactory,
+  type TokenResult,
 } from "@renxqoo/agent-cli-sdk";
 
-export function createCustomAuth<State extends { user?: unknown }>(options: {
+export function createCustomAuth<State>(options: {
   namespace: string;
-  authStyle?: "bearer" | "x-api-key" | "basic";
-  oauth?: { baseUrl: string; clientId: string; clientSecret: string };
-}): Plugin<State> {
-  const authStyle = options.authStyle ?? "bearer";
-  const sessions = new WeakMap<CommandContext<State>, { token: string; refreshable: boolean }>();
-
-  // 装配期状态:apply 里从 services.localState.store 解析后填入。
-  let ready!: {
-    store: ConfigStore;
-    providers: ReturnType<typeof defaultProviders>;
-    refresh?: () => Promise<Record<string, unknown> | null>;
-  };
-
+  oauth: OAuthClientConfig;
+}): PluginFactory<State> {
   return {
     name: `auth:${options.namespace}`,
-    enforce: "pre",
-
-    async apply(services) {
-      const store = services.localState.store;
-      ready = {
+    async setup({ localState }) {
+      const store = localState.store;
+      const providers = defaultProviders();
+      const refresh = createOAuthRefresh({
+        cfg: options.oauth,
         store,
-        providers: defaultProviders(),
-        refresh: options.oauth
-          ? createOn401Hook({ cfg: options.oauth, store, namespace: options.namespace })
-          : undefined,
-      };
-    },
-
-    async beforeCommand(ctx: CommandContext<State>) {
-      const { store, providers } = ready;
-      const providerContext: ProviderContext = {
         namespace: options.namespace,
-        configStore: store,
-        args: {},
-        env: process.env,
-      };
-      const resolved = await resolveWithChain(providers, providerContext);
-      if (!resolved) {
-        throw new AuthenticationError({
-          subtype: "no_credentials",
-          message: `${options.namespace} has no credentials`,
-          hint: "Configure a supported environment variable or sign in",
-        });
-      }
-
-      (ctx as { credentials: typeof ctx.credentials }).credentials = {
-        get: async (namespace) =>
-          (await store.loadCredentials(namespace)) as Record<string, string> | null,
-        save: (namespace, data) => store.saveCredentials(namespace, data),
-        clear: (namespace) => store.clearCredentials(namespace),
-      };
-
-      sessions.set(ctx, {
-        token: resolved.token.token,
-        refreshable: resolved.token.refreshable === true,
       });
-    },
-
-    async beforeRequest(ctx, request) {
-      const prepared = { ...request, headers: { ...request.headers } };
-      const session = sessions.get(ctx);
-      if (session) injectAuthHeader(prepared, session.token, authStyle);
-      return prepared;
-    },
-
-    async handleUnauthorized(ctx) {
-      const session = sessions.get(ctx);
-      if (!ready.refresh || !session?.refreshable) return { action: "decline" };
-      const token = await ready.refresh();
-      if (!token) {
-        return {
-          action: "reject",
-          error: new AuthenticationError({
-            subtype: "token_expired",
-            code: 401,
-            message: "Authentication expired (token refresh failed)",
-            hint: "Sign in again",
-          }),
-        };
-      }
-      sessions.set(ctx, { ...session, token });
-      return { action: "retry" };
+      const sessions = new WeakMap<CommandContext<State>, TokenResult>();
+      return {
+        name: `auth:${options.namespace}`,
+        enforce: "pre",
+        async beforeCommand(ctx) {
+          const resolved = await resolveWithChain(providers, {
+            namespace: options.namespace,
+            configStore: store,
+            args: {},
+            env: process.env,
+          });
+          if (!resolved)
+            throw new AuthenticationError({
+              subtype: "no_credentials",
+              message: "Sign in before running this command",
+            });
+          sessions.set(ctx, resolved.token);
+        },
+        async beforeRequest(ctx, request) {
+          const prepared = { ...request, headers: { ...request.headers } };
+          const session = sessions.get(ctx);
+          if (session) injectAuthHeader(prepared, session.token, "bearer");
+          return prepared;
+        },
+        async handleUnauthorized(ctx, event) {
+          const session = sessions.get(ctx);
+          if (!session?.refreshable || !session.sessionId) return { action: "decline" };
+          const authorization = Object.entries(event.request.headers ?? {}).find(
+            ([name]) => name.toLowerCase() === "authorization",
+          )?.[1];
+          if (!authorization?.startsWith("Bearer ")) return { action: "decline" };
+          const token = await refresh({
+            sessionId: session.sessionId,
+            token: authorization.slice("Bearer ".length),
+          });
+          if (!token)
+            return {
+              action: "reject",
+              error: new AuthenticationError({
+                subtype: "token_expired",
+                message: "Sign in again",
+              }),
+            };
+          sessions.set(ctx, { ...session, token: token.access_token });
+          return { action: "retry" };
+        },
+      };
     },
   };
 }
@@ -120,7 +97,7 @@ export function createCustomAuth<State extends { user?: unknown }>(options: {
 
 ## 2. Plugin-owned login commands
 
-A command contributed through `provides` skips that same plugin's `beforeCommand`. Therefore `ctx.credentials` is still the default no-op implementation. Plugin-owned login and logout commands must use the store captured during `apply` (`ready.store` in the skeleton above):
+A command contributed through `provides` skips that same plugin's `beforeCommand`. Therefore `ctx.credentials` is still the default no-op implementation. Plugin-owned login and logout commands must use the store captured during `setup` (`store` in the skeleton above):
 
 ```ts
 const authCommands = defineCommands({
@@ -135,7 +112,7 @@ const authCommands = defineCommands({
           message: "MY_CLI_API_KEY is not set",
         });
       }
-      await ready.store.saveCredentials(options.namespace, { apiKey });
+      await store.saveCredentials(options.namespace, { apiKey });
       return { data: { saved: true } };
     },
   }),
@@ -143,7 +120,7 @@ const authCommands = defineCommands({
     name: "logout",
     description: "Clear stored credentials",
     async run() {
-      await ready.store.clearCredentials(options.namespace);
+      await store.clearCredentials(options.namespace);
       return { data: { cleared: true } };
     },
   }),
@@ -165,7 +142,6 @@ interface CredentialProvider {
   name(): string;
   priority?(): number;
   resolveToken(context: ProviderContext): Promise<TokenResult | null>;
-  resolveIdentity?(context: ProviderContext): Promise<IdentityHint | null>;
 }
 ```
 

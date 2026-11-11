@@ -6,14 +6,13 @@ import { createTestCtx } from "../../test-utils.js";
 import { defineAuth } from "../index.js";
 import { createMemoryLocalState, type LocalState } from "../../local-state.js";
 
-/** 装配 helper:defineAuth 现在是同步工厂,异步装配在 apply(services)。 */
+/** 装配 helper:defineAuth 现在是同步工厂,异步装配在 setup(services)。 */
 async function assembledAuth(
   opts: Parameters<typeof defineAuth>[0],
   localState: LocalState = createMemoryLocalState(),
 ) {
   const plugin = defineAuth(opts);
-  await plugin.apply?.({ localState, appName: "test" });
-  return plugin;
+  return plugin.setup({ localState, appName: "test" });
 }
 
 describe("AuthSessionManager boundary", () => {
@@ -50,7 +49,7 @@ describe("AuthSessionManager boundary", () => {
       },
       async saveCredentials() {},
       async clearCredentials() {},
-      async withLock<T>(_namespace: string, fn: () => Promise<T>): Promise<T> {
+      async transactCredentials<T>(_namespace: string, fn: () => Promise<T>): Promise<T> {
         return fn();
       },
     };
@@ -60,7 +59,7 @@ describe("AuthSessionManager boundary", () => {
       baseUrl: "https://auth.test",
     });
     await expect(
-      plugin.apply?.({ localState: { kind: "memory", store: brokenStore }, appName: "test" }),
+      plugin.setup({ localState: { kind: "memory", store: brokenStore }, appName: "test" }),
     ).rejects.toThrow("corrupt config.json");
   });
 

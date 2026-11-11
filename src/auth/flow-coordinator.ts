@@ -1,119 +1,92 @@
-import type { ConfigStore, StoredOAuthCredentials } from "../credentials/types.js";
-import { CliError } from "../errs/index.js";
+import type { ConfigStore, OAuthSessionRef, StoredOAuthCredentials } from "../credentials/types.js";
+import { oauthSessionId } from "../credentials/oauth-session.js";
+import { AuthenticationError } from "../errs/index.js";
 import type { TokenInfo } from "../oauth-contracts.js";
 
-/** Context handed to a refresh strategy's acquire(). */
 export interface RefreshContext {
   refreshToken?: string;
-  /** Persisted granted scopes; client_credentials re-requests this exact envelope. */
   scopes?: string[];
 }
 
 export interface OAuthRefreshStrategy {
   type?: StoredOAuthCredentials["authMethod"];
   requiresRefreshToken?: boolean;
-  acquire(ctx: RefreshContext): Promise<TokenInfo>;
+  acquire(context: RefreshContext): Promise<TokenInfo>;
 }
 
 export interface OAuthFlowCoordinatorOptions {
   store: ConfigStore;
   namespace: string;
-  strategy?: OAuthRefreshStrategy;
-  /** Concise default-refresh constructor used by the public OAuth façade. */
-  refresh?: (refreshToken: string) => Promise<TokenInfo>;
+  strategy: OAuthRefreshStrategy;
 }
 
-/** Owns refresh singleflight and the refresh-to-persistence transaction. */
+/** Refreshes only the session that authenticated the rejected request. */
 export class OAuthFlowCoordinator {
-  readonly #store: ConfigStore;
-  readonly #namespace: string;
-  readonly #strategy: OAuthRefreshStrategy;
+  readonly #options: OAuthFlowCoordinatorOptions;
   readonly #inflight = new Map<string, Promise<TokenInfo | null>>();
 
   constructor(options: OAuthFlowCoordinatorOptions) {
-    this.#store = options.store;
-    this.#namespace = options.namespace;
-    if (options.strategy) {
-      this.#strategy = options.strategy;
-      return;
-    }
-    if (!options.refresh) throw new TypeError("OAuthFlowCoordinator requires a refresh strategy");
-    const refresh = options.refresh;
-    this.#strategy = {
-      requiresRefreshToken: true,
-      acquire(ctx) {
-        if (!ctx.refreshToken) throw new TypeError("refresh token is required");
-        return refresh(ctx.refreshToken);
-      },
-    };
+    this.#options = options;
   }
 
-  readonly refreshStoredSession = async (): Promise<TokenInfo | null> => {
-    const current = (await this.#store.loadCredentials(
-      this.#namespace,
-    )) as Partial<StoredOAuthCredentials> | null;
-    const refreshToken = current?.refreshToken || undefined;
-    const requiresToken = this.#strategy.requiresRefreshToken ?? false;
-    const authMethod = this.#strategy.type ?? current?.authMethod;
-    if ((requiresToken && !refreshToken) || !authMethod) return null;
-
-    const key = refreshToken ?? `${authMethod}:session`;
+  readonly refreshSession = (expected: OAuthSessionRef): Promise<TokenInfo | null> => {
+    const key = JSON.stringify([expected.sessionId, expected.token]);
     const existing = this.#inflight.get(key);
     if (existing) return existing;
-
-    const operation = this.#refreshAndPersist(refreshToken, authMethod).finally(() => {
-      this.#inflight.delete(key);
-    });
+    const operation = this.#refresh(expected).finally(() => this.#inflight.delete(key));
     this.#inflight.set(key, operation);
     return operation;
   };
 
-  async #refreshAndPersist(
-    refreshToken: string | undefined,
-    authMethod: StoredOAuthCredentials["authMethod"],
-  ): Promise<TokenInfo | null> {
-    // B5: load → refresh → save is guarded by a cross-process lock so concurrent CLI
-    // invocations cannot clobber each other's refreshed token.
-    return this.#store.withLock(this.#namespace, async () => {
-      // Authoritative re-load under the lock: another process may have refreshed first.
-      const current = (await this.#store.loadCredentials(
-        this.#namespace,
-      )) as Partial<StoredOAuthCredentials> | null;
-      const rt = current?.refreshToken || refreshToken;
-      const scopes = Array.isArray(current?.scopes) ? current!.scopes : undefined;
-      try {
-        const token = await this.#strategy.acquire({ refreshToken: rt, scopes });
-        const now = Date.now();
-        const updated: StoredOAuthCredentials = {
-          token: token.access_token,
-          refreshToken: token.refresh_token ?? rt ?? "",
-          ...(typeof token.expires_in === "number"
-            ? { expiresAt: now + token.expires_in * 1000 }
-            : {}),
-          scopes: token.scope ? token.scope.split(/\s+/).filter(Boolean) : (scopes ?? []),
-          storedAt: now,
-          authMethod,
-          ...(current?.user ? { user: current.user } : {}),
+  #refresh(expected: OAuthSessionRef): Promise<TokenInfo | null> {
+    const { store, namespace, strategy } = this.#options;
+    return store.transactCredentials(namespace, async (transaction) => {
+      const document = transaction.read();
+      if (!document || oauthSessionId(document) !== expected.sessionId) return null;
+      const current = document as unknown as StoredOAuthCredentials;
+      if (typeof current.token !== "string" || !current.authMethod) return null;
+      if (current.token !== expected.token) {
+        return {
+          access_token: current.token,
+          ...(current.refreshToken ? { refresh_token: current.refreshToken } : {}),
+          ...(current.expiresAt === undefined
+            ? {}
+            : { expires_in: Math.max(0, (current.expiresAt - Date.now()) / 1000) }),
+          scope: current.scopes?.join(" "),
         };
-        await this.#store.saveCredentials(
-          this.#namespace,
-          updated as unknown as Record<string, unknown>,
-        );
-        return token;
-      } catch (error) {
-        // L5: retryable transport/decode failures propagate so the caller sees an
-        // accurate retryable error instead of a generic "auth expired".
-        if (
-          error instanceof CliError &&
-          (error.category === "network" || error.category === "internal")
-        ) {
-          throw error;
-        }
-        // Permanent auth/config failure (e.g. invalid_grant): clear the stale session
-        // so the next call surfaces a clean "please log in" instead of a refresh loop.
-        await this.#store.clearCredentials(this.#namespace).catch(() => undefined);
-        return null;
       }
+      if (strategy.requiresRefreshToken && !current.refreshToken) return null;
+      let token: TokenInfo;
+      try {
+        token = await strategy.acquire({
+          refreshToken: current.refreshToken,
+          scopes: current.scopes,
+        });
+      } catch (error) {
+        if (error instanceof AuthenticationError && !error.retryable) {
+          transaction.clear();
+          return null;
+        }
+        throw error;
+      }
+      const now = Date.now();
+      const updated: StoredOAuthCredentials = {
+        sessionId: expected.sessionId,
+        token: token.access_token,
+        refreshToken: token.refresh_token ?? current.refreshToken ?? "",
+        ...(typeof token.expires_in === "number"
+          ? { expiresAt: now + token.expires_in * 1000 }
+          : {}),
+        scopes:
+          token.scope === undefined
+            ? (current.scopes ?? [])
+            : token.scope.split(/\s+/).filter(Boolean),
+        storedAt: now,
+        authMethod: strategy.type ?? current.authMethod,
+        ...(current.user ? { user: current.user } : {}),
+      };
+      transaction.write(updated as unknown as Record<string, unknown>);
+      return token;
     });
   }
 }

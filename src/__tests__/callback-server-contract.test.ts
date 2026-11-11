@@ -1,7 +1,48 @@
-import { describe, expect, it } from "vitest";
-import { evaluateCallbackRequest } from "../infra/callback-server.js";
+import { describe, expect, it, vi } from "vitest";
+import { createServer } from "node:http";
+import { once } from "node:events";
+import { evaluateCallbackRequest, waitForCallback } from "../infra/callback-server.js";
+import { authCodeFlow } from "../flows/authCode.js";
 
 describe("OAuth callback request boundary", () => {
+  it("reports a busy listening port without an orphaned result rejection", async () => {
+    const server = createServer();
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const port = (server.address() as { port: number }).port;
+    try {
+      await expect(
+        waitForCallback({ port, timeoutMs: 1000, expectedState: "state" }),
+      ).rejects.toMatchObject({ code: "EADDRINUSE" });
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("releases the real listener when opening the browser fails", async () => {
+    const server = createServer();
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const port = (server.address() as { port: number }).port;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await expect(
+      authCodeFlow.login({
+        type: "authorization_code",
+        cfg: { baseUrl: "https://auth.test", clientId: "app", clientSecret: "" },
+        callbackPort: port,
+        browser: { open: vi.fn().mockRejectedValue(new Error("browser failed")) },
+      }),
+    ).rejects.toThrow("browser failed");
+    await new Promise((resolve) => setImmediate(resolve));
+    server.listen(port, "127.0.0.1");
+    try {
+      await once(server, "listening");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it("ignores unrelated requests without completing the login", () => {
     const outcome = evaluateCallbackRequest("GET", "/favicon.ico", "expected");
 

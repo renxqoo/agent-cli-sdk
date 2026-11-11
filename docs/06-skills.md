@@ -187,7 +187,6 @@ metadata:
 | `args.*.required` | 是否必填                  | 参数表的"必填"列             |
 | `args.*.default`  | 默认值                    | 参数表的"默认"列             |
 | `args.*.desc`     | **可选**描述              | 参数表的"说明"列(不填则是 —) |
-| `requiresScope`   | 所需 scope                | 命令表的"权限"列             |
 
 ### 生成命令
 

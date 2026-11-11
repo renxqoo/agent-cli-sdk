@@ -257,7 +257,7 @@ function compileDescriptors(
     });
   }
   for (const name of pos) {
-    if (!(name in properties)) {
+    if (!Object.hasOwn(properties, name)) {
       throw new InternalError({
         subtype: "contract_violation",
         message: `defineCommand(${commandName}): positional field "${name}" is not in args.schema`,
@@ -266,6 +266,16 @@ function compileDescriptors(
   }
 
   let sawOptionalPositional = false;
+  for (const name of pos) {
+    if (!required.has(name)) sawOptionalPositional = true;
+    else if (sawOptionalPositional) {
+      throw new InternalError({
+        subtype: "contract_violation",
+        message: `defineCommand(${commandName}): required positional field "${name}" cannot follow an optional field`,
+      });
+    }
+  }
+  const flags = new Set<string>();
   const descriptors = Object.entries(properties).map(([name, property]) => {
     if (!isRecord(property)) {
       throw new InternalError({
@@ -288,15 +298,13 @@ function compileDescriptors(
     }
     const positional = positionalNames.has(name);
     const isRequired = required.has(name);
-    if (positional) {
-      if (!isRequired) sawOptionalPositional = true;
-      else if (sawOptionalPositional) {
-        throw new InternalError({
-          subtype: "contract_violation",
-          message: `defineCommand(${commandName}): required positional field "${name}" cannot follow an optional field`,
-        });
-      }
+    if (!positional && flags.has(flagName)) {
+      throw new InternalError({
+        subtype: "contract_violation",
+        message: `defineCommand(${commandName}): duplicate normalized flag --${flagName}`,
+      });
     }
+    if (!positional) flags.add(flagName);
     const type = propertyType(commandName, name, property);
     const description = typeof property.description === "string" ? property.description : undefined;
     const descriptor: ArgumentDescriptor = {
@@ -480,7 +488,8 @@ function setOption(
     return;
   }
   const current = options[name];
-  options[name] = current === undefined ? [value] : [...(current as unknown[]), value];
+  if (current === undefined) options[name] = [value];
+  else (current as unknown[]).push(value);
 }
 
 /** 非 array 旗标重复出现必须报错(与 argv 模式一致),幂等键尤其不能静默覆盖。 */
@@ -539,8 +548,8 @@ function unknownArgument(name: string): ValidationError {
 function unexpectedPositionals(values: readonly string[]): ValidationError {
   return new ValidationError({
     subtype: "invalid_argument",
-    param: values[0],
-    message: `Unexpected positional argument(s): ${values.join(" ")}`,
+    param: "args",
+    message: `Unexpected positional argument(s) (${values.length})`,
   });
 }
 

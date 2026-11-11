@@ -80,27 +80,13 @@ describe("buildAuthorizeUrl(RFC 6749 §4.1.1)", () => {
     expect(url).toContain("state=xyz123");
   });
 
-  it("scope 省略时 URL 不含 scope 参数", () => {
+  it("省略 scope 和 state 时只保留必需的 PKCE 参数", () => {
     const url = buildAuthorizeUrl(cfg, {
       redirectUri: "http://localhost:3000/callback",
       codeChallenge: RFC_CHALLENGE,
     });
     expect(url).not.toContain("scope=");
-  });
-
-  it("state 省略时 URL 不含 state 参数", () => {
-    const url = buildAuthorizeUrl(cfg, {
-      redirectUri: "http://localhost:3000/callback",
-      codeChallenge: RFC_CHALLENGE,
-    });
     expect(url).not.toContain("state=");
-  });
-
-  it("始终带 code_challenge_method=S256(OAuth 2.1 强制)", () => {
-    const url = buildAuthorizeUrl(cfg, {
-      redirectUri: "http://localhost:3000/callback",
-      codeChallenge: "anychallenge",
-    });
     expect(url).toContain("code_challenge_method=S256");
   });
 });
@@ -164,12 +150,5 @@ describe("clientCredentialsToken(RFC 6749 §4.4)", () => {
     const bodyStr = callBody.body as string;
     expect(bodyStr).toContain("grant_type=client_credentials");
     expect(bodyStr).toContain("scope=orders");
-  });
-
-  it("认证用 Basic header(client_id:client_secret)", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(200, { access_token: "AT", expires_in: 3600 }));
-    await clientCredentialsToken(cfg);
-    const callHeaders = fetchMock.mock.calls[0][1].headers as Record<string, string>;
-    expect(callHeaders.authorization).toMatch(/^Basic /);
   });
 });

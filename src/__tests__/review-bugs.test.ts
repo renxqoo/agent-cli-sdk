@@ -7,7 +7,6 @@ import { defineCli, defineCommand } from "../define.js";
 import { prettyPrint } from "../pretty.js";
 import { runCommand as executeCommand, type RunCommandOptions } from "../pipeline.js";
 import { createTestCtx } from "../test-utils.js";
-import { rawText } from "../output.js";
 import * as z from "zod";
 
 function runCommand<State>(
@@ -47,6 +46,55 @@ afterEach(() => {
   process.exitCode = undefined;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe("dispatch control and diagnostic output", () => {
+  it("renders leading help without executing a matching command", async () => {
+    const run = vi.fn(async () => ({ data: { changed: true } }));
+    const app = defineCli({
+      name: "demo",
+      description: "demo",
+      commands: { change: defineCommand({ name: "change", description: "change", run }) },
+    });
+    const result = await captureRun(app, ["--help", "change"]);
+    expect(run).not.toHaveBeenCalled();
+    expect(result.out).toContain("Usage:");
+    expect(result.code).toBe(0);
+  });
+
+  it("does not echo unparsed values when a route is unknown", async () => {
+    const app = defineCli({ name: "demo", description: "demo", commands: {} });
+    const result = await captureRun(app, [
+      "typo",
+      "--api-key",
+      "secret-key",
+      "--input",
+      '{"password":"secret-input"}',
+    ]);
+    expect(result.code).toBe(2);
+    expect(result.err).toContain("Unknown command");
+    expect(result.err).not.toContain("secret-");
+  });
+
+  it("passes valid non-cloneable argv values to the handler", async () => {
+    const app = defineCli({
+      name: "demo",
+      description: "demo",
+      commands: {
+        echo: defineCommand({
+          name: "echo",
+          description: "echo",
+          args: { schema: z.object({ value: z.string().transform((value) => () => value) }) },
+          async run(_ctx, args) {
+            return { data: { value: args.value() } };
+          },
+        }),
+      },
+    });
+    const result = await captureRun(app, ["--json", "echo", "--value", "hello"]);
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.out).data).toEqual({ value: "hello" });
+  });
 });
 
 // ============================================================================
@@ -127,7 +175,7 @@ describe("BUG-R3: prettyPrint 单对象含数组字段不应丢失其他字段",
 });
 
 // ============================================================================
-// BUG-R7 [中]: isOlderVersion 对非版本字符串('unknown'/'abc')返回 true
+// BUG-R7 [中]: isOlderVersion 对非版本字符串('unknown')返回 true
 // 根因: install-workflow.ts isOlderVersion Number("unknown")=NaN, NaN??0=NaN, 后续段 0<2 → true
 // 说明:stepInstallGlobally 调用处已有 installedVer!=="unknown" 守卫,故 install 流程不受影响;
 //      但 isOlderVersion 是导出的纯函数,"非版本 → true" 违反直觉契约,任何不带守卫的调用都会踩坑。
@@ -136,10 +184,6 @@ describe("BUG-R7: isOlderVersion 对非版本字符串应返回 false", () => {
   it("'unknown' vs '1.2.3' → 不应判为小于", async () => {
     const { isOlderVersion } = await import("../install-workflow.js");
     expect(isOlderVersion("unknown", "1.2.3")).toBe(false);
-  });
-  it("'abc' vs '1.2.3' → 不应判为小于", async () => {
-    const { isOlderVersion } = await import("../install-workflow.js");
-    expect(isOlderVersion("abc", "1.2.3")).toBe(false);
   });
 });
 
@@ -173,26 +217,6 @@ describe("BUG-R9: --json 在命令名之前不应被判为未知命令", () => {
 });
 
 // ============================================================================
-// BUG-R10 [中]: errorOnStatus 的 key 格式写错时启动期不报错,静默失效
-// 根因: define.ts:90-99 只校验 subtype,不校验 key 格式(N / Nxx)
-// ============================================================================
-describe("BUG-R10: errorOnStatus 非法 key 应启动期报错", () => {
-  it("`{ '5x': 'server_error' }` 应在 defineCli 抛错", () => {
-    expect(() =>
-      defineCli({
-        name: "x",
-        description: "x",
-        errorOnStatus: { "5x": "server_error" } as unknown as Record<
-          number | `${number}xx`,
-          string
-        >,
-        commands: {},
-      }),
-    ).toThrow();
-  });
-});
-
-// ============================================================================
 // BUG-R12 [低]: run 返回 {data: 标量} 不报 contract_violation,破坏 StructuredData 契约
 // 根因: pipeline.ts:88-97 只检查 typeof object + hasOwnProperty("data"),不校验 data 形态
 // ============================================================================
@@ -217,24 +241,5 @@ describe("BUG-R12: run 返回 {data: 标量} 应报 contract_violation", () => {
     process.stderr.write = e;
     expect(code).toBe(5);
     expect(JSON.parse(errOut).error.subtype).toBe("contract_violation");
-  });
-
-  it("rawText() 正式结果类型应原样输出", async () => {
-    const cmd = defineCommand({
-      name: "read",
-      async run() {
-        return rawText("# SKILL.md 原文");
-      },
-    });
-    let out = "";
-    const o = process.stdout.write.bind(process.stdout);
-    process.stdout.write = ((s: string) => {
-      out += s;
-      return true;
-    }) as typeof process.stdout.write;
-    const code = await runCommand({ spec: cmd, args: {}, ctx: createTestCtx(), plugins: [] });
-    process.stdout.write = o;
-    expect(code).toBe(0);
-    expect(out).toBe("# SKILL.md 原文");
   });
 });

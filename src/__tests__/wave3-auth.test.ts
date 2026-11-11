@@ -59,6 +59,7 @@ describe("L2: client_credentials refresh re-requests persisted scopes", () => {
   it("uses the stored granted scopes (joined), not the static opts.scope", async () => {
     const store = memoryStore();
     await store.saveCredentials("app", {
+      sessionId: "session",
       token: "old",
       refreshToken: "",
       expiresAt: 0,
@@ -84,7 +85,7 @@ describe("L2: client_credentials refresh re-requests persisted scopes", () => {
       scope: "static",
     });
 
-    const token = await handler();
+    const token = await handler({ sessionId: "session", token: "old" });
     expect(token?.access_token).toBe("new");
     expect(receivedScope).toBe("a b"); // persisted scopes, NOT "static"
   });
@@ -98,6 +99,7 @@ describe("L5: coordinator refresh error taxonomy", () => {
   it("rethrows retryable network errors", async () => {
     const store = memoryStore();
     await store.saveCredentials("app", {
+      sessionId: "session",
       token: "old",
       refreshToken: "rt",
       expiresAt: 0,
@@ -113,12 +115,15 @@ describe("L5: coordinator refresh error taxonomy", () => {
       namespace: "app",
       strategy: { requiresRefreshToken: true, acquire },
     });
-    await expect(coordinator.refreshStoredSession()).rejects.toBeInstanceOf(NetworkError);
+    await expect(
+      coordinator.refreshSession({ sessionId: "session", token: "old" }),
+    ).rejects.toBeInstanceOf(NetworkError);
   });
 
   it("returns null and clears the stale session on a permanent auth failure", async () => {
     const store = memoryStore();
     await store.saveCredentials("app", {
+      sessionId: "session",
       token: "old",
       refreshToken: "rt",
       expiresAt: 0,
@@ -134,7 +139,9 @@ describe("L5: coordinator refresh error taxonomy", () => {
       namespace: "app",
       strategy: { requiresRefreshToken: true, acquire },
     });
-    await expect(coordinator.refreshStoredSession()).resolves.toBeNull();
+    await expect(
+      coordinator.refreshSession({ sessionId: "session", token: "old" }),
+    ).resolves.toBeNull();
     expect(store._snapshot().credentials.app).toBeUndefined();
   });
 });
@@ -156,13 +163,16 @@ describe("B6: logout revokes access + refresh tokens", () => {
         },
       },
     });
-    const plugin = defineAuth({
+    const pluginDefinition = defineAuth({
       credentialNamespace: "crm",
       baseUrl: "http://t",
       clientId: "c",
       clientSecret: "s",
     });
-    await plugin.apply?.({ localState: { kind: "memory", store }, appName: "test" });
+    const plugin = await pluginDefinition.setup({
+      localState: { kind: "memory", store },
+      appName: "test",
+    });
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("{}", { status: 200 }));
@@ -198,13 +208,16 @@ describe("L3: status reports expired user session without throwing", () => {
         },
       },
     });
-    const plugin = defineAuth({
+    const pluginDefinition = defineAuth({
       credentialNamespace: "crm",
       baseUrl: "http://t",
       clientId: "c",
       clientSecret: "s",
     });
-    await plugin.apply?.({ localState: { kind: "memory", store }, appName: "test" });
+    const plugin = await pluginDefinition.setup({
+      localState: { kind: "memory", store },
+      appName: "test",
+    });
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     const ctx = createTestCtx();

@@ -30,7 +30,7 @@
 ### defineAuth 全部选项
 
 ```ts
-const auth = defineAuth({                  // 同步工厂,禁止 await;异步装配在 apply(services)
+const auth = defineAuth({                  // 同步工厂,禁止 await;异步装配在 setup(services)
   credentialNamespace: "crm",           // 必填:config/<ns>.json 与 credentials/<ns>.json 的隔离命名空间
   baseUrl: AUTH_BASE_URL,               // 必填:auth-proxy 地址
   scope: "orders:read offline_access",  // 可选:一份 scope,登录授权与注册声明(clientMetadata.scope)共用
@@ -48,7 +48,7 @@ const auth = defineAuth({                  // 同步工厂,禁止 await;异步�
 });
 ```
 
-工厂**不接收目录/store/localState 参数**——本地状态经 `apply(services)` 从 `defineCliApp({ dir })` 注入。
+工厂**不接收目录/store/localState 参数**——本地状态经 `setup(services)` 从 `defineCliApp({ dir })` 注入。
 
 **注册 metadata 缺省派生**(显式字段优先,hasOwnProperty 判断):
 
@@ -82,7 +82,7 @@ const app = await defineCliApp({
 });
 ```
 
-`defineAuth` 是**同步工厂**,返回 Plugin(不是 Promise),禁止 `await`。`defineCliApp` 在路由编译前自动执行插件 `apply(services)`,鉴权配置解析(读 config、可能请求 metadata)都在 apply 里完成。低层 `defineCli` 用户须手动 `await auth.apply?.({ localState, appName })`。
+`defineAuth` 是**同步工厂**,返回 PluginFactory,禁止 `await`。`defineCliApp` 在路由编译前自动执行插件 `setup(services)`,鉴权配置解析(读 config、可能请求 metadata)都在 setup 里完成。低层 `defineCli` 用户须手动 `const authRuntime = await auth.setup({ localState, appName })`。
 
 > 旧版 `await defineAuth({ localState })` 形态已删除,不保留兼容参数。
 
@@ -204,7 +204,7 @@ const app = await defineCliApp({
 });
 ```
 
-> agent-cli-sdk 不内置默认目录，app 用 `defineCliApp({ dir })` 决定一次；装配器把唯一 localState 经 `apply(services)` 注入 `defineAuth`、`defineInstaller`、`createUpdateNotifier`。测试使用 `defineCliApp({ localState: createMemoryLocalState(...) })`。高层 API 不保留 `store`、`configDir`、`cacheDir`、`localState` 兼容参数。
+> agent-cli-sdk 不内置默认目录，app 用 `defineCliApp({ dir })` 决定一次；装配器把唯一 localState 经 `setup(services)` 注入 `defineAuth`、`defineInstaller`、`createUpdateNotifier`。测试使用 `defineCliApp({ localState: createMemoryLocalState(...) })`。高层 API 不保留 `store`、`configDir`、`cacheDir`、`localState` 兼容参数。
 
 ### 安全边界
 

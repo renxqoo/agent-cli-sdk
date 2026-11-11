@@ -47,7 +47,7 @@ description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的
 6. 返回 `{ data, meta? }` 或 `void`。`data` 只能是对象、数组或 `null`。
 7. 用 `ctx.log` 写日志；业务命令禁止 `console.log` 污染 stdout。
 8. 用真实入口检测运行 `app.run(argv)`；无需 install 拦截——`install` 是 `defineInstaller` 插件提供的命令。
-9. 鉴权、安装或版本感知需要本地文件时，app 只通过 `defineCliApp({ dir })` 决定一次根目录；插件经 `apply(services)` 拿到本地状态，不接受目录参数。
+9. 鉴权、安装或版本感知需要本地文件时，app 只通过 `defineCliApp({ dir })` 决定一次根目录；插件经 `setup(services)` 拿到本地状态，不接受目录参数。
 10. 需要版本感知时使用框架的可选 `createUpdateNotifier`；XML 系统消息只能写 stderr，禁止自动执行提示中的安装命令。
 
 ### 4. 设置可信边界
@@ -86,8 +86,8 @@ description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的
 ## 不变量
 
 - `bin`、`defineCli.name` 和鉴权 `credentialNamespace` 用途不同；默认保持一致，并在落盘前检查冲突。
-- `defineAuth` 是**同步工厂**：异步装配在 `apply(services)` 里完成，`defineCliApp` 在路由编译前自动执行；禁止 `await` 工厂。
-- app 只能用 `defineCliApp({ dir })` 决定一次本地状态根目录；装配器把唯一 localState 经 `apply(services)` 注入 `defineAuth`、`defineInstaller`、`createUpdateNotifier`。高层 API 一律不接受目录参数，禁止各能力单独配置目录。
+- `defineAuth` 是**同步工厂**：异步装配在 `setup(services)` 里完成，`defineCliApp` 在路由编译前自动执行；禁止 `await` 工厂。
+- app 只能用 `defineCliApp({ dir })` 决定一次本地状态根目录；装配器把唯一 localState 经 `setup(services)` 注入 `defineAuth`、`defineInstaller`、`createUpdateNotifier`。高层 API 一律不接受目录参数，禁止各能力单独配置目录。
 - OAuth scope 必须来自已确认的服务契约和最小权限设计；不要猜 scope，也不要默认采用服务端公布的全部 scope。
 - 单业务域使用顶层 `commands`（例如 `<bin> list`）；不要生成 `<domain> <domain> list`。只有多个无关业务域才使用 `namespaces`。
 - 同名命令组不能用 spread 拍平；用 `namespaces` 保留路由。

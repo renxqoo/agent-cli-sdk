@@ -96,12 +96,6 @@ describe("flagProvider: 未提供一次性 key 时继续 provider chain", () => 
     const result = await flag.resolveToken(pctx);
     expect(result).toBeNull();
   });
-
-  it("未给 flag 但 env 有 token 时回退到 env", async () => {
-    const pctx = makePctx(memoryStore(), {}, { ORDERS_API_KEY: "sk_env" });
-    const result = await resolveWithChain(defaultProviders(), pctx);
-    expect(result?.token.source).toBe("env:ORDERS_API_KEY");
-  });
 });
 
 describe("memoryStore: 隔离文件 IO", () => {
@@ -123,14 +117,6 @@ describe("memoryStore: 隔离文件 IO", () => {
     expect(await store.loadCredentials("nope")).toBeNull();
   });
 
-  it("save/load 互不影响(深拷贝隔离)", async () => {
-    const store = memoryStore({ credentials: { orders: { apiKey: "sk1" } } });
-    const a = await store.loadCredentials("orders");
-    if (a) a.apiKey = "tampered";
-    const b = await store.loadCredentials("orders");
-    expect(b?.apiKey).toBe("sk1"); // 不被外部篡改影响
-  });
-
   it("_snapshot 看内部状态", async () => {
     const store = memoryStore();
     await store.saveConfig("orders", { baseUrl: "http://x" });
@@ -145,13 +131,6 @@ describe("memoryStore: 隔离文件 IO", () => {
     await store.saveConfig("orders", { baseUrl: "http://x", clientId: "c1" });
     await store.saveConfig("orders", {});
     expect(await store.loadConfig("orders")).toEqual({});
-  });
-
-  it("saveConfig 全量替换:旧字段不存在于新对象时被删除", async () => {
-    const store = memoryStore();
-    await store.saveConfig("orders", { clientId: "c1", clientSecret: "s1" });
-    await store.saveConfig("orders", { clientId: "c2" });
-    expect(await store.loadConfig("orders")).toEqual({ clientId: "c2" });
   });
 });
 

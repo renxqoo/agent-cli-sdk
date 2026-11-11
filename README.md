@@ -5,7 +5,7 @@
 > **A skill factory for agent-facing CLIs.** Install one skill, let your AI agent turn any company API into a CLI _and_ an agent skill — auth, unified output, typed errors and progressive disclosure included. The author writes only "which endpoint to call, how to map fields".
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/node-%3E%3D26-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml)
 
 ---
@@ -62,7 +62,7 @@ Done. Teammates run `acme orders list`; their agents discover `acme` from the sk
 
 ## Installation
 
-Requires **Node.js >= 20**. This package is ESM-only (`import` / dynamic `import()`; CommonJS `require()` is not supported).
+Requires **Node.js >= 26 / Bun >= 1.4**. This package is ESM-only (`import` / dynamic `import()`; CommonJS `require()` is not supported).
 
 ```bash
 npm install @renxqoo/agent-cli-sdk
@@ -126,7 +126,7 @@ import { join } from "node:path";
 
 export default await defineCliApp({
   name: "orders",
-  // One app-owned root; the assembler hands it to every stateful plugin via apply(services).
+  // One app-owned root; the assembler hands it to every stateful plugin via setup(services).
   dir: join(homedir(), ".orders"),
   plugins: [
     defineAuth({
@@ -312,3 +312,7 @@ See the [contribution guide](CONTRIBUTING.md), [security policy](SECURITY.md), a
 ## License
 
 [MIT](LICENSE) © [renxqoo](https://github.com/renxqoo)
+
+## Runtime migration
+
+Requires Node.js 26+ or Bun 1.4+. Stateful plugins return one runtime per app through PluginFactory.setup. See the [runtime migration guide](docs/08-runtime-refactor.md).

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { injectAuthHeader, createOn401Hook } from "../oauth.js";
+import { injectAuthHeader, createOAuthRefresh } from "../oauth.js";
 import { memoryStore } from "../credentials/config-store.js";
 import type { RequestOptions } from "../types.js";
 
@@ -33,7 +33,7 @@ describe("injectAuthHeader: header 注入工具(开发者写 Plugin 用)", () =>
 /** The public 401-refresh façade wraps the coordinator + default OAuth refresh. */
 function on401(cfg: { baseUrl: string; clientId: string; clientSecret: string }) {
   return (store: ReturnType<typeof memoryStore>, namespace: string) =>
-    createOn401Hook({ cfg, store, namespace });
+    createOAuthRefresh({ cfg, store, namespace });
 }
 
 describe("401 singleflight: 并发复用同一次 refresh + 落盘", () => {
@@ -52,6 +52,7 @@ describe("401 singleflight: 并发复用同一次 refresh + 落盘", () => {
     const store = memoryStore({
       credentials: {
         orders: {
+          sessionId: "session",
           token: "old_tok",
           refreshToken: "old_rt",
           expiresAt: 1,
@@ -80,10 +81,14 @@ describe("401 singleflight: 并发复用同一次 refresh + 落盘", () => {
         return new Response("{}", { status: 200 });
       });
 
-    const [r1, r2, r3] = await Promise.all([refresh(), refresh(), refresh()]);
-    expect(r1).toBe("new_tok");
-    expect(r2).toBe("new_tok");
-    expect(r3).toBe("new_tok");
+    const [r1, r2, r3] = await Promise.all([
+      refresh({ sessionId: "session", token: "old_tok" }),
+      refresh({ sessionId: "session", token: "old_tok" }),
+      refresh({ sessionId: "session", token: "old_tok" }),
+    ]);
+    expect(r1?.access_token).toBe("new_tok");
+    expect(r2?.access_token).toBe("new_tok");
+    expect(r3?.access_token).toBe("new_tok");
     // singleflight:3 并发只 refresh 1 次
     expect(refreshCalls).toBe(1);
     // 落盘修正:新 token 写回 store
@@ -98,6 +103,7 @@ describe("401 singleflight: 并发复用同一次 refresh + 落盘", () => {
     const store = memoryStore({
       credentials: {
         orders: {
+          sessionId: "session",
           token: "old",
           refreshToken: "bad",
           expiresAt: 1,
@@ -114,7 +120,7 @@ describe("401 singleflight: 并发复用同一次 refresh + 落盘", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async () => new Response('{"error":"invalid_grant"}', { status: 400 }));
 
-    const result = await refresh();
+    const result = await refresh({ sessionId: "session", token: "old" });
     expect(result).toBeNull();
     // L5: permanent auth failure clears the stale session.
     expect(store._snapshot().credentials.orders).toBeUndefined();
@@ -125,6 +131,7 @@ describe("401 singleflight: 并发复用同一次 refresh + 落盘", () => {
     const store = memoryStore({
       credentials: {
         orders: {
+          sessionId: "session",
           token: "old",
           refreshToken: "keep-me",
           expiresAt: 1,
@@ -145,7 +152,9 @@ describe("401 singleflight: 并发复用同一次 refresh + 落盘", () => {
         new Response(JSON.stringify({ access_token: "new", expires_in: 3600 }), { status: 200 }),
       );
 
-    await expect(refresh()).resolves.toBe("new");
+    await expect(refresh({ sessionId: "session", token: "old" })).resolves.toMatchObject({
+      access_token: "new",
+    });
     expect(store._snapshot().credentials.orders.refreshToken).toBe("keep-me");
     expect(store._snapshot().credentials.orders.scopes).toEqual(["orders:read"]);
     fetchSpy.mockRestore();

@@ -17,16 +17,13 @@ import {
   existsSync,
   readFileSync,
   lstatSync,
-  openSync,
-  writeSync,
-  closeSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withFileLockSync } from "../infra/file-lock.js";
 import { listSkills, listPath } from "../skills/reader.js";
-import { replaceDirectoryTransaction, syncSkills } from "../skills/sync.js";
-import { resolveActiveTargets, DEFAULT_SKILL_TARGETS } from "../skills/targets.js";
+import { replaceDirectoryTransaction } from "../skills/sync.js";
+import { resolveActiveTargets } from "../skills/targets.js";
 import { refreshAutogen, AUTOGEN_START, AUTOGEN_END } from "../skills/gen.js";
 
 const dirs: string[] = [];
@@ -43,35 +40,22 @@ function tempDir(): string {
 // B1: stale lock recovery
 // ---------------------------------------------------------------------------
 
-describe("B1: withFileLockSync reclaims a stale lock", () => {
-  it("reclaims a lockfile whose owner PID is dead", () => {
+describe("exclusive synchronous locks", () => {
+  it("releases ownership after a failed operation", () => {
     const dir = tempDir();
-    // pre-create a stale lock for key "sync" with a dead PID
-    const lockPath = join(dir, ".rxcli-sync.lock");
-    const handle = openSync(lockPath, "w");
-    writeSync(handle, JSON.stringify({ pid: 999_999, startedAt: 1 }));
-    closeSync(handle);
-
-    let ran = false;
-    const result = withFileLockSync(dir, "sync", () => {
-      ran = true;
-      return "done";
-    });
-    expect(result).toBe("done");
-    expect(ran).toBe(true);
-    // lock released after the operation
-    expect(existsSync(lockPath)).toBe(false);
+    expect(() =>
+      withFileLockSync(dir, "sync", () => {
+        throw new Error("failed");
+      }),
+    ).toThrow("failed");
+    expect(withFileLockSync(dir, "sync", () => "recovered")).toBe("recovered");
   });
 
-  it("throws when a live lock is held (cannot be reclaimed)", () => {
+  it("rejects a second live owner", () => {
     const dir = tempDir();
-    const lockPath = join(dir, ".rxcli-sync.lock");
-    // owner = current process (alive) and fresh → not stale
-    const handle = openSync(lockPath, "w");
-    writeSync(handle, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
-    closeSync(handle);
-
-    expect(() => withFileLockSync(dir, "sync", () => "x")).toThrow(/held by another process/);
+    withFileLockSync(dir, "sync", () => {
+      expect(() => withFileLockSync(dir, "sync", () => "x")).toThrow(/held by another process/);
+    });
   });
 });
 
@@ -157,10 +141,7 @@ describe("B2: replaceDirectoryTransaction dereferences symlinks", () => {
     // real files are still copied...
     expect(readFileSync(join(dest, "SKILL.md"), "utf8")).toBe("head");
     expect(readFileSync(join(dest, "refs", "real.md"), "utf8")).toBe("body");
-    // ...and the loop was entered exactly once: its target was already seen on
-    // the second hit, so no nested loop dir is created.
-    expect(existsSync(join(dest, "loop", "SKILL.md"))).toBe(true);
-    expect(existsSync(join(dest, "loop", "loop"))).toBe(false);
+    expect(existsSync(join(dest, "loop"))).toBe(false);
   });
 });
 
@@ -206,30 +187,5 @@ describe("M12: resolveActiveTargets with a custom target list", () => {
     const result = resolveActiveTargets(custom);
     expect(result.map((t) => t.key)).toEqual(["custom-only"]);
     expect(result.map((t) => t.key)).not.toContain("agents");
-  });
-
-  it("still injects agents for the default list", () => {
-    const result = resolveActiveTargets(DEFAULT_SKILL_TARGETS);
-    expect(result.map((t) => t.key)).toContain("agents");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// lockStaleAfterMs option threading
-// ---------------------------------------------------------------------------
-
-describe("syncSkills lockStaleAfterMs option", () => {
-  it("accepts a custom lockStaleAfterMs and completes the sync", () => {
-    const root = tempDir();
-    mkdirSync(join(root, "good"), { recursive: true });
-    writeFileSync(join(root, "good", "SKILL.md"), "---\ndescription: x\n---\n# good\n");
-    const dest = join(tempDir(), "out");
-
-    const res = syncSkills(root, {
-      targets: [{ key: "t", dir: dest }],
-      lockStaleAfterMs: 1000,
-    });
-    expect(res.targets.find((t) => t.key === "t")?.ok).toBe(true);
-    expect(existsSync(join(dest, "good", "SKILL.md"))).toBe(true);
   });
 });

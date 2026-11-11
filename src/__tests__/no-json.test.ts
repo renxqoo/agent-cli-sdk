@@ -375,26 +375,6 @@ describe("管道保护:stdin 非 TTY 时 --no-json 强制 JSON", () => {
   });
 });
 
-describe("--json: 显式强制 JSON", () => {
-  it("--json 显式传 → JSON 统一输出(无论 TTY)", async () => {
-    const app = defineCli({
-      name: "demo",
-      description: "d",
-      commands: {
-        hello: defineCommand({
-          name: "hello",
-          description: "x",
-          async run() {
-            return { data: { a: 1 } };
-          },
-        }),
-      },
-    });
-    await app.run(["hello", "--json"]);
-    expect(JSON.parse(stdoutBuf).ok).toBe(true);
-  });
-});
-
 describe("--no-json: json 不进命令 args(框架 flag)", () => {
   it("命令的 args 收不到 json(被框架剔除)", async () => {
     let receivedArgs: Record<string, unknown> = {};

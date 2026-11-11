@@ -1,4 +1,5 @@
 import type { CommandGroup, CommandSpec, ErrorOnStatus, Plugin } from "./types.js";
+import type { MatchResult } from "./cli-argv.js";
 import { InternalError, SUBTYPE_REGISTRY } from "./errs/index.js";
 import {
   compileCommandSchema,
@@ -56,6 +57,14 @@ export class CommandRegistry<State> {
     return this.#entries.has(routeKey(route));
   }
 
+  resolve(argv: string[]): MatchResult<State> {
+    const [first, second] = argv;
+    if (first === undefined) return { matched: null, rest: argv };
+    const nested = second === undefined ? undefined : this.#entries.get(routeKey([first, second]));
+    const matched = nested ?? this.#entries.get(first) ?? null;
+    return { matched, rest: matched ? argv.slice(matched.route.length) : argv };
+  }
+
   routed(): Array<{
     route: string[];
     spec: CommandSpec<any, unknown, State>;
@@ -71,7 +80,7 @@ export class CommandRegistry<State> {
   }
 
   commands(): CommandGroup<State> {
-    const commands: CommandGroup<State> = {};
+    const commands: CommandGroup<State> = Object.create(null);
     for (const entry of this.#entries.values()) {
       if (entry.route.length === 1) commands[entry.route[0]!] = entry.spec;
     }
@@ -79,11 +88,11 @@ export class CommandRegistry<State> {
   }
 
   namespaces(): Record<string, CommandGroup<State>> {
-    const namespaces: Record<string, CommandGroup<State>> = {};
+    const namespaces: Record<string, CommandGroup<State>> = Object.create(null);
     for (const entry of this.#entries.values()) {
       if (entry.route.length !== 2) continue;
       const [namespace, name] = entry.route as [string, string];
-      namespaces[namespace] ??= {};
+      namespaces[namespace] ??= Object.create(null);
       namespaces[namespace]![name] = entry.spec;
     }
     return namespaces;
@@ -192,7 +201,7 @@ export function validateErrorOnStatus(mapping?: ErrorOnStatus): void {
           `Use an HTTP status from 100 to 599 or a class from 1xx to 5xx.`,
       });
     }
-    if (!(subtype in SUBTYPE_REGISTRY)) {
+    if (!Object.hasOwn(SUBTYPE_REGISTRY, subtype)) {
       throw new InternalError({
         subtype: "contract_violation",
         message:

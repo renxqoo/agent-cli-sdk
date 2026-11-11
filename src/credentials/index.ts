@@ -8,6 +8,8 @@
 
 export type {
   ConfigStore,
+  CredentialTransaction,
+  OAuthSessionRef,
   CredentialProvider,
   ProviderContext,
   TokenResult,
@@ -25,5 +27,4 @@ export {
   oauthProvider,
   defaultProviders,
   resolveWithChain,
-  resolveIdentityWithChain,
 } from "./providers.js";

@@ -20,7 +20,7 @@
 // 核心装配
 export { defineCli, defineCommand, defineCommands } from "./define.js";
 
-// 应用装配器(推荐入口:唯一目录决策点 + 插件 apply 装配)
+// 应用装配器(推荐入口:唯一目录决策点 + 插件 setup 装配)
 export {
   defineCliApp,
   type DefineCliAppOptions,
@@ -48,7 +48,7 @@ export {
   getUserInfo,
   revokeToken,
   registerClient,
-  createOn401Hook,
+  createOAuthRefresh,
   generateCodeVerifier,
   computeCodeChallenge,
   buildAuthorizeUrl,
@@ -84,11 +84,12 @@ export {
   fileProvider,
   oauthProvider,
   resolveWithChain,
-  resolveIdentityWithChain,
   type ConfigStore,
   type CredentialProvider,
   type ProviderContext,
   type TokenResult,
+  type OAuthSessionRef,
+  type CredentialTransaction,
   type IdentityHint,
   type FileStoreOptions,
 } from "./credentials/index.js";
@@ -134,7 +135,7 @@ export { createFetchAdapter, throwForResponse, type CreateFetchAdapterOptions } 
 // 插件
 export {
   sortPlugins,
-  applyPlugins,
+  setupPlugins,
   runOnAppRun,
   runAfterAppRun,
   runBeforeCommand,
@@ -194,7 +195,6 @@ export {
   SkillRepository,
   type SkillRepositoryOptions,
   type GenerateSkillOptions,
-  type SkillFileStore,
 } from "./skills/index.js";
 
 // 执行器
@@ -235,6 +235,8 @@ export type {
 export type {
   ErrorDecision,
   Plugin,
+  PluginFactory,
+  PluginInput,
   CommandInputEvent,
   AppServices,
   AppRunEvent,

@@ -181,8 +181,8 @@ throw new errs.ValidationError({
 | authentication | `no_token`, `token_expired`, `token_revoked`                              |
 | authorization  | `missing_scope`, `app_permission_denied`, `forbidden`                     |
 | config         | `missing_config`, `invalid_config`, `unbound_env`, `skill_sync_failed`    |
-| network        | `timeout`, `connection_refused`, `dns_failure`, `ssl_error`               |
-| api            | `not_found`, `already_exists`, `conflict`, `rate_limited`, `server_error` |
+| network        | `timeout`, `cancelled`, `connection_refused`, `dns_failure`, `ssl_error`               |
+| api            | `not_found`, `already_exists`, `conflict`, `rate_limited`, `server_error`, `http_error` |
 | policy         | `content_blocked`, `challenge_required`, `access_denied`                  |
 | internal       | `decode_failure`, `unknown`, `contract_violation`                         |
 | confirmation   | `high_risk_write`                                                         |
@@ -220,23 +220,24 @@ throw new errs.ValidationError({
 
 业务命令 `run` 里调 `ctx.get`/`ctx.post` 等(返回 `TransportResponse`,含 `status`)。两种处理模式:
 
-> **关于 401 自动续期**:业务包通常不处理 401——agent-cli-sdk 请求层内部检测到 401 会自动触发 token refresh(singleflight 复用),refresh 的执行能力由 oauthProvider 提供(见 `05-credentials.md`)。两者协作:请求层管"检测 + 单次复用",provider 管"怎么换 token"。业务包无感,只管 `ctx.get`。下面两种模式针对的是**非鉴权类**的业务 status(404/403/5xx 等)。
+> **关于 401 自动续期**:业务包通常不处理 401——agent-cli-sdk 请求层内部检测到 401 会自动触发 token refresh(singleflight 复用),refresh 的执行能力由 auth 插件提供(见 `05-credentials.md`)。两者协作:请求层管"检测 + 单次复用",auth 插件管"怎么换 token"。业务包无感,只管 `ctx.get`。下面两种模式针对的是**非鉴权类**的业务 status(404/403/5xx 等)。
 
 ### 模式 A:命令自己判断 status,throw 类型化错误
 
 ```ts
 async run(ctx, { id }) {
-  const res = await ctx.get(`/orders/${id}`)
+  const res = await ctx.get(`/orders/${id}`, undefined, { allowHttpErrors: true })
   if (res.status === 404) throw new errs.NotFoundError(`订单 ${id} 不存在`)
   if (res.status === 403) throw new errs.PermissionError({ subtype: 'forbidden', message: '无权访问该订单' })
   if (res.status >= 500) throw new errs.APIError({ subtype: 'server_error', code: res.status, message: '服务端错误', retryable: true })
+  if (res.status >= 400) throw new errs.APIError({ subtype: "http_error", code: res.status, message: `HTTP ${res.status}` })
   return { data: res.data }
 }
 ```
 
 **适用:业务包想给特定 status 赋予业务语义**(如 404 = "订单不存在")。
 
-### 模式 B:开启自动 throw(agent-cli-sdk 按规则转换 status)
+### 模式 B:默认类型化错误，按需覆盖应用映射
 
 ```ts
 // 在 defineCli 里配置:哪些 status 自动 throw
@@ -261,7 +262,7 @@ export default defineCli({
 
 > 若配置了一个未在 subtype 注册表登记的 subtype,agent-cli-sdk 在启动时校验失败(CI 里也会 fail,避免拼写错误悄悄上线)。
 
-开启后,client.request 对匹配的 status 自动 throw 对应类型化错误,业务包不用手写 if。**默认不开启**(决策:业务错误透传 status,不自动 throw——但允许业务包 opt-in)。
+2.0 默认将 HTTP 4xx/5xx 转为类型化错误，`errorOnStatus` 用来覆盖默认分类。单次 `allowHttpErrors: true` 可显式检查响应，但最终 401 仍为认证错误。默认映射、超时和取消见[生产契约](09-production-contracts.md)。
 
 ---
 

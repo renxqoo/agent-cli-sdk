@@ -1,6 +1,6 @@
 {
   "name": "@renxqoo/agent-cli-sdk",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Agent-native CLI framework — a command-line framework that lets AI agents consume business data in a structured way (auth, unified output, errors, credentials, pipes, skills)",
   "keywords": [
     "agent",
@@ -49,6 +49,10 @@
     "./skills": {
       "types": "./dist/skills/index.d.ts",
       "import": "./dist/skills/index.js"
+    },
+    "./advanced": {
+      "types": "./dist/advanced.d.ts",
+      "import": "./dist/advanced.js"
     }
   },
   "scripts": {
@@ -66,7 +70,8 @@
     "test:watch": "vitest",
     "prepare": "husky",
     "test:bun": "bun --bun node_modules/vitest/vitest.mjs run",
-    "test:package:bun": "bun scripts/package-smoke.mjs"
+    "test:package:bun": "bun scripts/package-smoke.mjs",
+    "release:check": "node scripts/check-release.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",

@@ -1,5 +1,8 @@
 # 00 · 架构总览
 
+> 当前 2.0 公开行为与 API 边界见[生产契约](09-production-contracts.md)。
+
+
 > 本文档是 agent-cli-sdk 的设计锚点。所有后续文档(命令使用、SDK 指南、统一输出格式、错误、凭证、skill)都以本文档的全局决策为准,实现不允许偏离。
 
 ---
@@ -49,7 +52,7 @@
 │  ─ 统一输出格式:成功/失败的统一输出契约                                │
 │  ─ 错误分类:9 类 + exit code + 类型化构造器                   │
 │  ─ 认证:defineAuth 标准工厂 + 可组合认证基础块                │
-│  ─ 插件系统:vite 式 Plugin + 6 钩子 + enforce 三档            │
+│  ─ 插件系统:vite 式 Plugin + 8 个命令钩子 + 2 个应用钩子 + enforce 三档            │
 │  ─ 管道:PipeRecord 类型 + stdin/stdout                       │
 │  ─ skill:list/read/sync + 命令文档自动生成                    │
 │  ─ 配置:ConfigStore(按 namespace 隔离凭证,业务包各自 baseUrl) │
@@ -117,8 +120,8 @@
 | 15  | skill        | list/read/sync + **defineCommands 自动生成命令文档**                                                                                                            | `06-skills.md`      |
 | 16  | 测试         | vitest + `createTestCtx`                                                                                                                                        | `02-sdk-guide.md`   |
 | 17  | 类型         | 命令三泛型 `<Args, Result, State>` + `defineCommands<State>`;`ctx.state` 强类型防乱塞;请求泛型 `ctx.get<T>()` 可选                                              | `02-sdk-guide.md`   |
-| 18  | 插件钩子     | 6 个:beforeCommand/beforeRequest/observeRequest/handleUnauthorized/transformOutput/handleError;**enforce 三档**(pre/normal/post);observeError/handleError 链式 | `02-sdk-guide.md`   |
-| 19  | 前版不做     | resource() 生成器、写入确认、OpenAPI 自动注册                                                                                                                   | 本文档              |
+| 18  | 插件钩子     | 8 个命令钩子:beforeCommand/observeInput/beforeRequest/observeRequest/handleUnauthorized/transformOutput/observeError/handleError;2 个应用钩子:onAppRun/afterAppRun;**enforce 三档**(pre/normal/post);observeError/handleError 链式 | `02-sdk-guide.md`   |
+| 19  | 前版不做     | resource() 生成器、OpenAPI 自动注册;写入确认已由 policy 实现                                                                                                                   | 本文档              |
 
 ### 几个决策的"为什么"(简版,详见专题文档)
 

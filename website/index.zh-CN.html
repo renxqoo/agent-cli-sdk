@@ -280,7 +280,7 @@
     <span><b>Node</b> ≥ 26 / <b>Bun</b> ≥ 1.4</span>
     <span>仅 <b>ESM</b></span>
     <span><b>9</b> 类类型化错误</span>
-    <span><b>0</b> 配置</span>
+    <span><b>2.0</b> 预览</span>
     <span><b>MIT</b></span>
   </div>
 
@@ -296,7 +296,7 @@
       <div class="line out">已安装 1 个包，耗时 2.1s</div>
       <div class="line out"># 包内置 <span class="k">skills/agent-cli-builder</span> —— 把它装进你的 agent:</div>
       <div class="line out">#   "帮我安装这个 skill: github.com/renxqoo/agent-cli-sdk/tree/main/skills/agent-cli-builder"</div>
-      <div class="line"><span class="prompt">$ </span><span class="cmd">acme <span class="arg">orders list</span> --limit 5 | jq .data</span><span class="caret"></span></div>
+      <div class="line"><span class="prompt">$ </span><span class="cmd">acme <span class="arg">orders list</span> --limit 5 --json | jq .data</span><span class="caret"></span></div>
     </div>
   </div>
 </div>
@@ -325,7 +325,7 @@
         <div class="num">3</div>
         <div>
           <h3>生成与同步</h3>
-          <p><code>skills gen</code> 写出 SKILL.md；<code>skills sync</code> 把它分发到 Claude、Codex 及所有其他 agent 目录。</p>
+          <p><code>skills gen</code> 写出 SKILL.md；<code>skills sync</code> 把它分发到标准 Agent 目录及探测到的 Claude、Codex 等工具目录。</p>
         </div>
       </div>
     </div>
@@ -338,27 +338,42 @@
     <h2>一次声明，双端复用</h2>
     <p class="lead">同一条命令既是人类 CLI 又是 agent skill——单一来源，永不漂移。</p>
     <div class="code-label">一条命令的全部业务代码</div>
-    <pre class="code">import { defineCliApp, defineCommand } from "@renxqoo/agent-cli-sdk";
+    <pre class="code">import { defineCli, defineCommand } from "@renxqoo/agent-cli-sdk";
 import * as z from "zod";
 
-const app = await defineCliApp({
+const app = defineCli({
   name: "acme",
   binName: "acme",
+  description: "Query company orders",
   baseUrl: "https://api.acme.com",
-  commands: {
-    orders: defineCommand({
-      name: "orders",
-      description: "List orders",
-      args: { schema: z.object({ limit: z.coerce.number().default(20) }) },
-      async run(ctx, args) {
-        const res = await ctx.get("/orders", { limit: args.limit });
-        return { data: res.data, meta: { count: res.data.length } };
-      },
-    }),
+  requestTimeoutMs: 30_000,
+  createState: () =&gt; ({}),
+  skillsDir: "./skills",
+  commands: {},
+  namespaces: {
+    orders: {
+      list: defineCommand({
+        name: "list",
+        description: "List orders",
+        args: { schema: z.object({
+          limit: z.coerce.number().int().min(1).max(100).default(20),
+        }) },
+        async run(ctx, args) {
+          const res = await ctx.get&lt;Array&lt;{ id: string; total: number }&gt;&gt;(
+            "/orders", { limit: args.limit },
+          );
+          return { data: res.data, meta: { count: res.data.length } };
+        },
+      }),
+    },
   },
-});</pre>
+});
+
+export default app;</pre>
+    <p class="lead" style="margin-top:24px;font-size:14px;">以上示例面向 2.x；当前分支的 2.0.0 尚未发布。请先核对实际安装版本。业务 bin 在真实入口调用 <code>app.run(argv)</code>；完整入口与升级步骤见 <a href="https://github.com/renxqoo/agent-cli-sdk/blob/main/docs/09-production-contracts.md">生产契约与迁移说明</a>。</p>
+
     <p style="margin-top:14px; color:var(--ink-soft); font-size:14px;">
-      人类运行 <code style="font-family:var(--mono);font-size:13px;background:var(--paper-3);padding:1px 6px;border-radius:3px">acme orders list | jq</code>。
+      人类运行 <code style="font-family:var(--mono);font-size:13px;background:var(--paper-3);padding:1px 6px;border-radius:3px">acme orders list --json | jq</code>。
       Agent 读取 <code style="font-family:var(--mono);font-size:13px;background:var(--paper-3);padding:1px 6px;border-radius:3px">skills/acme/SKILL.md</code>，用同样的方式调用。
     </p>
   </div>
@@ -370,12 +385,15 @@ const app = await defineCliApp({
     <h2>agent 所需的一切</h2>
     <p class="lead">可靠地调用 API——开箱即用。</p>
     <div class="grid">
-      <div class="card"><span class="idx">01 / output</span><h3>JSON 统一输出格式</h3><p>成功是 stdout 上的 <code>{ok, data, meta}</code>；其余一切都在 stderr。可 <code>| jq</code> 组合。</p></div>
-      <div class="card"><span class="idx">02 / errors</span><h3>9 类类型化错误</h3><p>校验、鉴权、网络、未找到、策略……各自映射到一个 exit code，agent 可据此分支。</p></div>
-      <div class="card"><span class="idx">03 / auth</span><h3>OAuth 2.1</h3><p>设备码流程、PKCE、client-credentials，带 401 自动续期——一行配置搞定。</p></div>
+      <div class="card"><span class="idx">01 / output</span><h3>JSON 统一输出格式</h3><p>成功是 stdout 上的 <code>{ok, source, data, meta}</code>；其余一切都在 stderr。可 <code>| jq</code> 组合。</p></div>
+      <div class="card"><span class="idx">02 / errors</span><h3>9 类类型化错误</h3><p>HTTP 4xx/5xx 默认转为类型化错误和非零退出码；显式检查响应使用 <code>allowHttpErrors</code>。</p></div>
+      <div class="card"><span class="idx">03 / auth</span><h3>OAuth 2.1</h3><p>设备码、PKCE、client-credentials；会话隔离、并发刷新协调，401 最多续期重试一次。</p></div>
       <div class="card"><span class="idx">04 / disclosure</span><h3>渐进式披露</h3><p>SKILL.md 自动生成并同步；agent 按需懒加载，未用到的 API 零 token 开销。</p></div>
       <div class="card"><span class="idx">05 / schema</span><h3>Zod 单一来源</h3><p>一份 schema 同时驱动校验、类型、帮助与 <code>--input-schema</code>。没有第二套协议。</p></div>
-      <div class="card"><span class="idx">06 / plugins</span><h3>插件系统</h3><p>Vite 式 <code>apply</code> + <code>provides</code> + 生命周期钩子。鉴权和安装器本身也只是插件。</p></div>
+      <div class="card"><span class="idx">06 / plugins</span><h3>插件系统</h3><p>Vite 式 <code>setup(services)</code> + <code>provides</code> + 生命周期钩子。鉴权和安装器本身也只是插件。</p></div>
+      <div class="card"><span class="idx">07 / requests</span><h3>时限与取消</h3><p>每次请求默认 30 秒，包含响应体读取。支持 <code>requestTimeoutMs</code>、单次 <code>timeout</code> 和 <code>AbortSignal</code>。</p></div>
+      <div class="card"><span class="idx">08 / API</span><h3>明确的公开边界</h3><p>根入口编写业务；<code>/advanced</code> 组合运行时；<code>/skills</code> 管理 Skill。公开入口均遵守 SemVer。</p></div>
+      <div class="card"><span class="idx">09 / delivery</span><h3>发布验证</h3><p>版本与 Changelog 门禁，Node/Bun 回归，以及真实 tarball 安装、消费者类型和失败行为检查。</p></div>
     </div>
   </div>
 </section>

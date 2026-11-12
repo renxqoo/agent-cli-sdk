@@ -58,7 +58,7 @@ request: async (opts) => {
 注意：
 
 - 每个响应都返回 `status`、`data` 和 `headers`。
-- `createTestCtx` 不执行 `defineCli` 装配、插件生命周期或 `errorOnStatus`；这些用端到端测试覆盖。
+- `createTestCtx` 运行真实请求执行器的默认 HTTP 分类；mock 返回 404/500 也会抛错，除非调用显式允许检查响应。它不执行应用装配、插件 setup 或应用级自定义 `errorOnStatus`；这些用端到端测试覆盖。
 - 测 `ctx.state`、日志、凭证或管道时显式注入对应 mock。
 - 不在快照中保存 token、请求头或完整敏感响应。
 
@@ -119,7 +119,9 @@ expect(JSON.parse(stdout)).toMatchObject({ ok: true, source: "my-cli" });
 expect(stderr).toBe("");
 ```
 
-再覆盖未知命令、缺失参数、一个 `errorOnStatus` 状态、裸标量 data 和插件顺序。不要只直接调用 `command.run`。
+再覆盖未知命令、缺失参数、一个自定义 `errorOnStatus` 状态、裸标量 data 和插件顺序。未配置映射的 HTTP 500 必须输出 stderr `api/server_error`、退出码 1，stdout 为空。显式 `allowHttpErrors` 的命令仍须处理其余失败，最终 401 不能变成成功。不要只直接调用 `command.run`。
+
+涉及请求控制或自定义插件时，验证应用/单次时限、响应头之后 body 仍受时限约束、取消返回 `network/cancelled` 且 `retryable: false`、取消后不发 401 重试，以及重建请求不丢 signal。`createTestCtx` 的 mock adapter 不执行真实 Fetch 超时；用可取消的 Fetch 替身或回环 HTTP 验证网络接缝。审计取消测试须先等审计启动再取消，并验证调用方停止等待而审计仍仅执行一次。
 
 每组 JSON 参数命令至少覆盖：
 
@@ -139,7 +141,7 @@ expect(stderr).toBe("");
 3. 检查日志和错误是否对 token、cookie、Authorization 和个人数据脱敏。
 4. 对写命令验证预览、确认、权限错误和回滚提示。
 5. dry-run 打包，确认 bin、已 bundle/压缩的 dist、README、Skill 和 references 均存在；从临时安装的产物导入公共 API。
-6. 在临时目录安装包产物并读取 Skill，避免只验证源码路径。
+6. 在临时目录安装包产物并读取 Skill，避免只验证源码路径；从 tarball 编译消费者类型和运行失败命令。SDK 本仓还须验证根入口、`/advanced`、`/skills`、`/credentials`、`/errs`，并运行 `release:check --base <git-ref>`。业务包只运行其实际存在的发布脚本。
 
 真实 API 冒烟只使用明确授权的环境。记录服务、账号范围和是否产生数据；测试后清理专用资源。
 

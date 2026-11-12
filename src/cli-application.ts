@@ -37,6 +37,7 @@ import { runCommand } from "./pipeline.js";
 import { compilePlugins, runAfterAppRun, runOnAppRun } from "./plugin.js";
 import { qrcodeCommand } from "./qrcode.js";
 import { createFetchAdapter } from "./request.js";
+import { DEFAULT_REQUEST_TIMEOUT_MS, validateRequestTimeout } from "./request-controls.js";
 import { createBuiltinSkillsCommands } from "./skills/builtin.js";
 import * as z from "zod";
 
@@ -53,6 +54,7 @@ interface CompiledApplication<State> {
   ownedRoutes: ReadonlyMap<Plugin<State>, string[][]>;
   createState: () => State;
   baseUrl?: string;
+  requestTimeoutMs: number;
   errorOnStatus?: ErrorOnStatus;
 }
 
@@ -161,7 +163,10 @@ class CliApplicationRuntime<State> implements App {
 
   async #execute(invocation: CommandInvocation<State>): Promise<number> {
     const { matched } = invocation;
-    const adapter = createFetchAdapter({ baseUrl: this.#compiled.baseUrl });
+    const adapter = createFetchAdapter({
+      baseUrl: this.#compiled.baseUrl,
+      timeout: this.#compiled.requestTimeoutMs,
+    });
     const inputOwnsStdin = matched.schema.mode === "json";
     const pipe =
       inputOwnsStdin || process.stdin.isTTY ? emptyPipe() : createPipeReader(process.stdin);
@@ -198,6 +203,8 @@ class CliApplicationRuntime<State> implements App {
 function compileApplication<State>(options: DefineCliOptions<State>): CompiledApplication<State> {
   assertRouteIdentifier(options.name, "app");
   validateErrorOnStatus(options.errorOnStatus);
+  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  validateRequestTimeout(requestTimeoutMs);
 
   const plugins = compilePlugins(options.plugins ?? []);
   const binName = options.binName ?? detectBinName() ?? options.name;
@@ -233,6 +240,7 @@ function compileApplication<State>(options: DefineCliOptions<State>): CompiledAp
     ownedRoutes: registry.ownedRoutes(plugins),
     createState,
     baseUrl: options.baseUrl,
+    requestTimeoutMs,
     errorOnStatus: options.errorOnStatus,
   };
 }

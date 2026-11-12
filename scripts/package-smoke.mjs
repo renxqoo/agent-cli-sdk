@@ -64,6 +64,10 @@ try {
     "package/docs/06-skills.md",
     "package/docs/07-structured-input.md",
     "package/docs/08-runtime-refactor.md",
+    "package/docs/09-production-contracts.md",
+    "package/docs/09-production-contracts.en.md",
+    "package/dist/advanced.js",
+    "package/dist/advanced.d.ts",
   ];
 
   for (const entry of requiredEntries) {
@@ -104,13 +108,19 @@ try {
       'import * as skillExports from "@renxqoo/agent-cli-sdk/skills";',
       'import * as z from "zod";',
       'import * as sdk from "@renxqoo/agent-cli-sdk";',
+      'import * as advanced from "@renxqoo/agent-cli-sdk/advanced";',
       "for (const removed of ['applyPlugins', 'createOn401Hook', 'resolveIdentityWithChain']) if (removed in sdk) throw new Error('removed API exported: ' + removed);",
+      "for (const moved of ['runCommand', 'setupPlugins', 'createContext', 'createFetchAdapter', 'generateAutogenBlock']) if (moved in sdk) throw new Error('advanced API leaked into root: ' + moved);",
+      "if (!advanced.runCommand || !advanced.setupPlugins || !advanced.createContext || !advanced.createFetchAdapter) throw new Error('advanced subpath failed');",
       "if (!defineCliApp || !defineCommand || !errs) throw new Error('root export failed');",
       "if (!errorExports.errs) throw new Error('errs subpath failed');",
       "if (!credentialExports.memoryStore) throw new Error('credentials subpath failed');",
       "if (!skillExports.listSkills) throw new Error('skills subpath failed');",
       "const command = defineCommand({ name: 'create', description: 'create', args: { type: 'json', schema: z.object({ id: z.string() }) }, async run(_ctx, args) { return { data: args }; } });",
-      "const app = await defineCliApp({ name: 'smoke', binName: 'smoke', description: 'smoke', localState: createMemoryLocalState(), plugins: [defineAuth({ credentialNamespace: 'smoke', baseUrl: 'https://smoke.invalid', bearerToken: 'fixture' })], commands: { create: command } });",
+      "globalThis.fetch = async () => new Response(JSON.stringify({message:'upstream unavailable'}), {status:500});",
+      "const fail = defineCommand({ name:'fail', description:'HTTP failure', async run(ctx) { return {data:(await ctx.get('/items')).data}; } });",
+      "const cancel = defineCommand({ name:'cancel', description:'caller cancellation', async run(ctx) { return {data:(await ctx.get('/items', undefined, {signal:AbortSignal.abort()})).data}; } });",
+      "const app = await defineCliApp({ name: 'smoke', binName: 'smoke', description: 'smoke', baseUrl:'https://smoke.invalid', requestTimeoutMs:500, localState: createMemoryLocalState(), plugins: [defineAuth({ credentialNamespace: 'smoke', baseUrl: 'https://smoke.invalid', bearerToken: 'fixture' })], commands: { create: command, fail, cancel } });",
       "await app.run(process.argv.slice(2));",
     ].join("\n"),
   );
@@ -123,6 +133,61 @@ try {
   assert(result.ok === true && result.data.id === "record-1", "published command runtime failed");
   const help = run(process.execPath, ["smoke.mjs", "--help"], consumerDir);
   assert(help.includes("Usage:") && help.includes("create"), "published help failed");
+
+  for (const [command, status, subtype] of [
+    ["fail", 1, "server_error"],
+    ["cancel", 4, "cancelled"],
+  ]) {
+    let failure;
+    try {
+      run(process.execPath, ["smoke.mjs", command, "--json"], consumerDir);
+    } catch (error) {
+      failure = error;
+    }
+    assert(failure?.status === status, `published ${command} exit code failed`);
+    assert(String(failure.stdout).trim() === "", `published ${command} polluted stdout`);
+    const envelope = JSON.parse(String(failure.stderr));
+    assert(
+      envelope.ok === false && envelope.error.subtype === subtype,
+      `published ${command} error contract failed`,
+    );
+  }
+
+  writeFileSync(
+    join(consumerDir, "types.mts"),
+    [
+      'import { defineCli, type CommandContext, type RequestControls } from "@renxqoo/agent-cli-sdk";',
+      'import { createContext, setupPlugins } from "@renxqoo/agent-cli-sdk/advanced";',
+      'import { generateAutogenBlock } from "@renxqoo/agent-cli-sdk/skills";',
+      "declare const ctx: CommandContext;",
+      "const controls: RequestControls = { timeout: 100, signal: new AbortController().signal };",
+      'void ctx.get<{id:string}>("/items", undefined, controls);',
+      'void ctx.delete("/items/1", controls);',
+      'defineCli({name:"types",description:"fixture",commands:{},requestTimeoutMs:100});',
+      "// @ts-expect-error Runtime dispatchers are not part of the root API.",
+      'import { runCommand } from "@renxqoo/agent-cli-sdk";',
+      "void [createContext,setupPlugins,generateAutogenBlock,runCommand];",
+    ].join("\n"),
+  );
+  run(
+    node,
+    [
+      join(packageDir, "node_modules", "typescript", "bin", "tsc"),
+      "--noEmit",
+      "--strict",
+      "--skipLibCheck",
+      "--target",
+      "ES2024",
+      "--module",
+      "NodeNext",
+      "--moduleResolution",
+      "NodeNext",
+      "--typeRoots",
+      join(packageDir, "node_modules", "@types"),
+      "types.mts",
+    ],
+    consumerDir,
+  );
 
   console.log(`Package smoke test passed: ${tarballName}`);
 } finally {

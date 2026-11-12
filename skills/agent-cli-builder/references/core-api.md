@@ -1,5 +1,7 @@
 # Core Implementation Contract
 
+HTTP 4xx/5xx throw by default in 2.0. `errorOnStatus` overrides default classification. Set `requestTimeoutMs` on the app (default 30,000 ms). All HTTP helpers accept final `RequestControls` with `timeout`, `signal`, and explicit `allowHttpErrors`; handle all error statuses when opting into inspection. Runtime dispatch/context factories use `/advanced`; Skill utilities use `/skills`.
+
 Read this file before implementing any CLI with `agent-cli-builder`. It reflects the current `@renxqoo/agent-cli-sdk` source contract.
 
 ## Contents
@@ -113,6 +115,7 @@ const app = await defineCliApp({
   dir: join(homedir(), ".my-cli"),
   baseUrl: process.env.TODOS_API_URL ?? "https://api.example.com",
   commands: todoCommands,
+  createState: () => ({}),
   errorOnStatus: { 404: "not_found", 429: "rate_limited", "5xx": "server_error" },
   defaultFormat: "auto",
   skillsDir: "./skills",
@@ -134,18 +137,19 @@ Global installation makes `argv[1]` a symlink, so compare real paths. Never run 
 
 Key `defineCliApp` options:
 
-| Option          | Rule                                                                                    |
-| --------------- | --------------------------------------------------------------------------------------- |
-| `dir`           | The app's one local-state root (`dir` XOR `localState`; injected via `setup(services)`) |
-| `name`          | Output `source`, pipe type, and Skill identity                                          |
-| `binName`       | The actual shell command; set it explicitly                                             |
-| `commands`      | Required top-level commands; use for one domain                                         |
-| `namespaces`    | Use only for multiple unrelated domains                                                 |
-| `plugins`       | Plain Plugin objects (`defineAuth` and friends are sync factories), never Promises      |
-| `errorOnStatus` | HTTP status to registered subtype mapping                                               |
-| `defaultFormat` | `auto` by default, or `json` / `human`                                                  |
-| `skillsDir`     | Enables built-in `skills` commands                                                      |
-| `skillsTargets` | Overrides default synchronization targets                                               |
+| Option             | Rule                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| `dir`              | The app's one local-state root (`dir` XOR `localState`; injected via `setup(services)`) |
+| `name`             | Output `source`, pipe type, and Skill identity                                          |
+| `binName`          | The actual shell command; set it explicitly                                             |
+| `commands`         | Required top-level commands; use for one domain                                         |
+| `namespaces`       | Use only for multiple unrelated domains                                                 |
+| `plugins`          | Plain Plugin objects (`defineAuth` and friends are sync factories), never Promises      |
+| `requestTimeoutMs` | Default per-attempt deadline in milliseconds; 30,000 by default                         |
+| `errorOnStatus`    | Override built-in HTTP error classification with registered subtypes                    |
+| `defaultFormat`    | `auto` by default, or `json` / `human`                                                  |
+| `skillsDir`        | Enables built-in `skills` commands                                                      |
+| `skillsTargets`    | Overrides default synchronization targets                                               |
 
 The install wizard is a plugin-provided command, not an entry-point intercept. Add `defineInstaller({ skillsSource })` to the app's plugins and `rxcli install [--lang zh|en]` routes through the normal pipeline; the entry point stays a plain `app.run(argv)`.
 
@@ -154,13 +158,32 @@ The install wizard is a plugin-provided command, not an entry-point intercept. A
 Every command receives `run(ctx, args)`. In argv and JSON mode alike, `args` is exactly the validated Zod output object. Framework policy and input-provenance fields are not mixed into it. Commands can use:
 
 - `ctx.get/post/put/patch/delete`, returning `{ status, data, headers }`.
-- `ctx.request` for custom methods, query, body, headers, or timeout.
+- `ctx.request` for custom methods, query, body or headers; it accepts the same request controls.
 - `ctx.state` for typed state shared by plugins.
 - `ctx.log` for stderr-only logs.
 - `ctx.pipe` for upstream `PipeRecord` input.
 - `ctx.credentials` after auth initialization.
 
 Type requests from the verified API. Do not use `any` or multi-field fallbacks to conceal an unknown contract.
+
+### 2.x request controls and entry points
+
+GET accepts controls after query; POST/PUT/PATCH after body; DELETE after path:
+
+```ts
+const response = await ctx.get(
+  "/orders",
+  { limit: 20 },
+  {
+    timeout: 5_000,
+    signal: AbortSignal.timeout(10_000),
+  },
+);
+```
+
+The default is 30 seconds per physical attempt, configurable through app `requestTimeoutMs`. It includes body reading, not plugin work or shared OAuth refresh; pass `signal` to cover the complete request wait. Cancellation stops the caller waiting; started audit/refresh work may continue and upstream writes are not rolled back. Use `allowHttpErrors: true` only for explicit status inspection; final 401 still throws.
+
+Business factories, types and auth primitives remain at the root. Import `setupPlugins`, `runCommand`, `createContext`, `createFetchAdapter` and other runtime composition helpers from `@renxqoo/agent-cli-sdk/advanced`; import `generateAutogenBlock`, `syncSkills` and other Skill helpers from `/skills`. Check the installed version: these 2.x interfaces do not apply to an unmigrated 1.x project.
 
 ## 5. Output, errors, and logs
 

@@ -8,6 +8,8 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D26-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml)
 
+**2.0 迁移**：HTTP 错误默认抛出，请求默认超时 30 秒；运行时组合 API 使用 `/advanced`，Skill 工具使用 `/skills`。见[生产契约与迁移](docs/09-production-contracts.md)。
+
 ---
 
 ## 这是什么
@@ -153,7 +155,8 @@ defineCli({
   plugins: [authPlugin],           // 可选:插件(鉴权/日志/审计…)
   commands: { list, get },         // 必填:顶层命令 → orders list
   namespaces: { orders: {...} },   // 可选:子命名空间 → orders orders list
-  baseUrl: 'https://api.x.com',    // 可选:ctx.get/post/… 的后端地址
+  baseUrl: 'https://api.x.com',
+  requestTimeoutMs: 30_000,    // 可选:ctx.get/post/… 的后端地址
   errorOnStatus: { 404: 'not_found', '5xx': 'server_error' },  // 可选
   defaultFormat: 'auto',           // 可选:'auto'(默认)| 'json' | 'human'
   skillsDir: './skills',           // 可选:启用内置 skills 命令
@@ -307,7 +310,7 @@ pnpm test         # vitest
 pnpm test:package # npm tarball 冒烟测试
 ```
 
-提交 PR 或问题前,请先读[贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md)和[支持说明](SUPPORT.md)。
+提交 PR 或问题前,请先读[贡献指南](CONTRIBUTING.md)。
 
 ## License
 

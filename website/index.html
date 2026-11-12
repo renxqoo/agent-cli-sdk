@@ -280,7 +280,7 @@
     <span><b>Node</b> ≥ 26 / <b>Bun</b> ≥ 1.4</span>
     <span><b>ESM</b> only</span>
     <span><b>9</b> typed errors</span>
-    <span><b>0</b> config</span>
+    <span><b>2.0</b> preview</span>
     <span><b>MIT</b></span>
   </div>
 
@@ -296,7 +296,7 @@
       <div class="line out">added 1 package in 2.1s</div>
       <div class="line out"># the package ships <span class="k">skills/agent-cli-builder</span> — install it into your agent:</div>
       <div class="line out">#   "install this skill: github.com/renxqoo/agent-cli-sdk/tree/main/skills/agent-cli-builder"</div>
-      <div class="line"><span class="prompt">$ </span><span class="cmd">acme <span class="arg">orders list</span> --limit 5 | jq .data</span><span class="caret"></span></div>
+      <div class="line"><span class="prompt">$ </span><span class="cmd">acme <span class="arg">orders list</span> --limit 5 --json | jq .data</span><span class="caret"></span></div>
     </div>
   </div>
 </div>
@@ -325,7 +325,7 @@
         <div class="num">3</div>
         <div>
           <h3>Generate &amp; sync</h3>
-          <p><code>skills gen</code> writes the SKILL.md; <code>skills sync</code> drops it into Claude, Codex, and every other agent directory.</p>
+          <p><code>skills gen</code> writes the SKILL.md; <code>skills sync</code> publishes it to the standard Agent directory and detected tools such as Claude and Codex.</p>
         </div>
       </div>
     </div>
@@ -338,27 +338,42 @@
     <h2>One declaration, dual use</h2>
     <p class="lead">The same command is a human CLI and an agent skill — one source, never drifting apart.</p>
     <div class="code-label">The entire business code for one command</div>
-    <pre class="code">import { defineCliApp, defineCommand } from "@renxqoo/agent-cli-sdk";
+    <pre class="code">import { defineCli, defineCommand } from "@renxqoo/agent-cli-sdk";
 import * as z from "zod";
 
-const app = await defineCliApp({
+const app = defineCli({
   name: "acme",
   binName: "acme",
+  description: "Query company orders",
   baseUrl: "https://api.acme.com",
-  commands: {
-    orders: defineCommand({
-      name: "orders",
-      description: "List orders",
-      args: { schema: z.object({ limit: z.coerce.number().default(20) }) },
-      async run(ctx, args) {
-        const res = await ctx.get("/orders", { limit: args.limit });
-        return { data: res.data, meta: { count: res.data.length } };
-      },
-    }),
+  requestTimeoutMs: 30_000,
+  createState: () =&gt; ({}),
+  skillsDir: "./skills",
+  commands: {},
+  namespaces: {
+    orders: {
+      list: defineCommand({
+        name: "list",
+        description: "List orders",
+        args: { schema: z.object({
+          limit: z.coerce.number().int().min(1).max(100).default(20),
+        }) },
+        async run(ctx, args) {
+          const res = await ctx.get&lt;Array&lt;{ id: string; total: number }&gt;&gt;(
+            "/orders", { limit: args.limit },
+          );
+          return { data: res.data, meta: { count: res.data.length } };
+        },
+      }),
+    },
   },
-});</pre>
+});
+
+export default app;</pre>
+    <p class="lead" style="margin-top:24px;font-size:14px;">This example targets 2.x; this branch's 2.0.0 has not been published yet. Check your installed version first. The business bin calls <code>app.run(argv)</code> from its real entry point. See <a href="https://github.com/renxqoo/agent-cli-sdk/blob/main/docs/09-production-contracts.en.md">production contracts and migration</a> for entry-point and upgrade guidance.</p>
+
     <p style="margin-top:14px; color:var(--ink-soft); font-size:14px;">
-      Humans run <code style="font-family:var(--mono);font-size:13px;background:var(--paper-3);padding:1px 6px;border-radius:3px">acme orders list | jq</code>.
+      Humans run <code style="font-family:var(--mono);font-size:13px;background:var(--paper-3);padding:1px 6px;border-radius:3px">acme orders list --json | jq</code>.
       Agents read <code style="font-family:var(--mono);font-size:13px;background:var(--paper-3);padding:1px 6px;border-radius:3px">skills/acme/SKILL.md</code> and call it the same way.
     </p>
   </div>
@@ -370,12 +385,15 @@ const app = await defineCliApp({
     <h2>Everything an agent needs</h2>
     <p class="lead">Reliable API calling — out of the box.</p>
     <div class="grid">
-      <div class="card"><span class="idx">01 / output</span><h3>JSON unified output format</h3><p>Success is <code>{ok, data, meta}</code> on stdout; everything else on stderr. <code>| jq</code>-composable.</p></div>
-      <div class="card"><span class="idx">02 / errors</span><h3>9 typed errors</h3><p>Validation, auth, network, not-found, policy… each mapped to an exit code an agent can branch on.</p></div>
-      <div class="card"><span class="idx">03 / auth</span><h3>OAuth 2.1</h3><p>Device flow, PKCE, client-credentials with 401 auto-refresh — one line of config.</p></div>
+      <div class="card"><span class="idx">01 / output</span><h3>JSON unified output format</h3><p>Success is <code>{ok, source, data, meta}</code> on stdout; everything else on stderr. <code>| jq</code>-composable.</p></div>
+      <div class="card"><span class="idx">02 / errors</span><h3>9 typed errors</h3><p>HTTP 4xx/5xx fail with typed errors and nonzero exit codes by default. Explicit status inspection uses <code>allowHttpErrors</code>.</p></div>
+      <div class="card"><span class="idx">03 / auth</span><h3>OAuth 2.1</h3><p>Device flow, PKCE and client-credentials, with isolated sessions, coordinated refresh and at most one 401 retry.</p></div>
       <div class="card"><span class="idx">04 / disclosure</span><h3>Progressive disclosure</h3><p>SKILL.md auto-generated and synced; agents load it lazily so unused APIs cost zero tokens.</p></div>
       <div class="card"><span class="idx">05 / schema</span><h3>Zod single source</h3><p>One schema drives validation, types, help and <code>--input-schema</code>. No second protocol.</p></div>
-      <div class="card"><span class="idx">06 / plugins</span><h3>Plugin system</h3><p>Vite-style <code>apply</code> + <code>provides</code> + lifecycle hooks. Auth and the installer are just plugins.</p></div>
+      <div class="card"><span class="idx">06 / plugins</span><h3>Plugin system</h3><p>Vite-style <code>setup(services)</code> + <code>provides</code> + lifecycle hooks. Auth and the installer are just plugins.</p></div>
+      <div class="card"><span class="idx">07 / requests</span><h3>Deadlines &amp; cancellation</h3><p>30 seconds per attempt, including body reading. Configure <code>requestTimeoutMs</code>, per-request <code>timeout</code> and <code>AbortSignal</code>.</p></div>
+      <div class="card"><span class="idx">08 / API</span><h3>Public API boundaries</h3><p>Root for business code, <code>/advanced</code> for runtime composition, <code>/skills</code> for Skill tools. Public entry points follow SemVer.</p></div>
+      <div class="card"><span class="idx">09 / delivery</span><h3>Release verification</h3><p>Version and Changelog gates, Node/Bun regression tests, and real tarball installation, consumer types and failure checks.</p></div>
     </div>
   </div>
 </section>

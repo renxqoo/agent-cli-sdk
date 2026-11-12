@@ -59,7 +59,7 @@ request: async (options) => {
 Rules:
 
 - Return `status`, `data`, and `headers` in every mock response.
-- `createTestCtx` does not run `defineCli` assembly, plugin lifecycle, or `errorOnStatus`; cover them end to end.
+- `createTestCtx` uses the real executor and default HTTP classification: mocked 404/500 responses throw unless the call explicitly allows inspection. It does not run application assembly, plugin setup or app-specific `errorOnStatus`; cover those end to end.
 - Inject explicit state, log, credential, and pipe mocks when required.
 - Never snapshot tokens, headers, or complete sensitive responses.
 
@@ -118,7 +118,9 @@ expect(JSON.parse(stdout)).toMatchObject({ ok: true, source: "my-cli" });
 expect(stderr).toBe("");
 ```
 
-Also test an unknown command, missing argument, one mapped HTTP status, scalar data rejection, and every plugin ordering dependency. Do not test only `command.run`.
+Also test unknown commands, missing arguments, one custom status mapping, scalar rejection and plugin ordering. An unmapped HTTP 500 must produce stderr `api/server_error`, exit 1 and empty stdout. Explicit `allowHttpErrors` commands must handle remaining failures; final 401 cannot become success. Do not test only `command.run`.
+
+For request controls or custom plugins, verify app/per-request timeouts, deadlines during body reading after headers, non-retryable `network/cancelled`, no authentication retry after cancellation and signal preservation when rebuilding requests. The `createTestCtx` mock adapter does not enforce real Fetch deadlines: use an abort-aware Fetch stub or loopback HTTP. For audit cancellation, wait until audit starts before cancelling; verify the caller stops waiting and audit still runs once.
 
 For every JSON-argument command family, cover:
 
@@ -138,7 +140,7 @@ Before release:
 3. Verify redaction of token, cookie, Authorization, and personal data in logs and errors.
 4. Verify preview, confirmation, permission failure, and rollback hints for writes.
 5. Dry-run the package and confirm bin, minified/bundled dist, README, Skills, and references; install the artifact and import its public API.
-6. Install the package artifact in a temporary directory and read a Skill from the artifact, not the source tree.
+6. Install the artifact in a temporary directory, read its Skill, compile consumer types and run a failing command. This SDK also checks root, `/advanced`, `/skills`, `/credentials`, `/errs` and runs `release:check --base <git-ref>`; generated business packages should run only scripts they actually provide.
 
 Use a live API only in an explicitly authorized environment. Record the service and account scope, whether data is created, and how test records are cleaned up.
 

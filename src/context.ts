@@ -75,11 +75,16 @@ export function createContext<State>(options: CreateContextOptions<State>): Comm
     pipe: options.pipe ?? emptyPipe(),
     credentials: options.credentials ?? createNoopCredentials(),
     request: (request) => executor.execute(ctx, applyPolicy(request)),
-    get: (path, query) => executor.execute(ctx, { method: "GET", path, query }),
-    post: (path, body) => executor.execute(ctx, applyPolicy({ method: "POST", path, body })),
-    put: (path, body) => executor.execute(ctx, applyPolicy({ method: "PUT", path, body })),
-    patch: (path, body) => executor.execute(ctx, applyPolicy({ method: "PATCH", path, body })),
-    delete: (path) => executor.execute(ctx, applyPolicy({ method: "DELETE", path })),
+    get: (path, query, controls) =>
+      executor.execute(ctx, { ...controls, method: "GET", path, query }),
+    post: (path, body, controls) =>
+      executor.execute(ctx, applyPolicy({ ...controls, method: "POST", path, body })),
+    put: (path, body, controls) =>
+      executor.execute(ctx, applyPolicy({ ...controls, method: "PUT", path, body })),
+    patch: (path, body, controls) =>
+      executor.execute(ctx, applyPolicy({ ...controls, method: "PATCH", path, body })),
+    delete: (path, controls) =>
+      executor.execute(ctx, applyPolicy({ ...controls, method: "DELETE", path })),
   };
   return ctx;
 }

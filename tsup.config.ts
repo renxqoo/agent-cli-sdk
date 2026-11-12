@@ -3,6 +3,7 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: {
     index: "src/index.ts",
+    advanced: "src/advanced.ts",
     "errs/index": "src/errs/index.ts",
     "credentials/index": "src/credentials/index.ts",
     "skills/index": "src/skills/index.ts",

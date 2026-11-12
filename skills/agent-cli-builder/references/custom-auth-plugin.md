@@ -1,6 +1,6 @@
 # Custom Authentication Plugins and Providers
 
-Use this only when `defineAuth` cannot express the protocol, such as HMAC, mTLS, or composite signing. Custom auth relies on lower-level APIs, so pin the framework version and test provider priority, persistence, refresh, retry, and redaction.
+Use this only when `defineAuth` cannot express the protocol, such as X-API-Key, Basic, HMAC, mTLS, or composite signing. Custom auth relies on lower-level APIs, so pin the framework version and test provider priority, persistence, refresh, retry, and redaction.
 
 ## Contents
 
@@ -93,7 +93,7 @@ export function createCustomAuth<State>(options: {
 }
 ```
 
-`handleUnauthorized` returns an explicit `decline`, `retry`, or `reject` decision. The session is keyed by `CommandContext`, so concurrent invocations cannot overwrite one another. Standard OAuth/API-key/Bearer/Basic integrations should use `defineAuth`; it owns the same isolation and canonical output identity without exposing private runtime channels.
+`handleUnauthorized` returns an explicit `decline`, `retry`, or `reject` decision. The session is keyed by `CommandContext`, so concurrent invocations cannot overwrite one another. Standard OAuth/Bearer integrations should use `defineAuth`; it owns the same isolation and canonical output identity without exposing private runtime channels.
 
 ## 2. Plugin-owned login commands
 
@@ -204,6 +204,8 @@ With `handleUnauthorized` configured, the request runtime:
 2. Reuses one in-flight refresh for concurrent requests when the underlying hook supports singleflight.
 3. Persists the refreshed token.
 4. Applies the token, reruns all `beforeRequest` hooks, and retries once.
-5. Throws `AuthenticationError(token_expired)` if refresh fails or the retry is still 401.
+5. Retains authentication classification for a final 401 (normally `no_token`); explicit refresh rejection may report `token_expired`, while transient network failures remain network errors.
 
 The plugin must update its context-bound session before retry hooks run. Re-signing plugins must recompute timestamps, nonces, and signatures on retry. Business commands should not implement a second 401 retry loop.
+
+In 2.x, `allowHttpErrors` never bypasses final 401. Caller cancellation is non-retryable `network/cancelled`; do not relabel it as expired auth or start another retry. Cancellation stops the caller waiting for shared refresh without cancelling that transaction. Preserve `...request` and its controls. Import context/adapter factories and runtime dispatchers from `/advanced` when composing a runtime.

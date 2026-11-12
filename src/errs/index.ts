@@ -78,6 +78,7 @@ export const SUBTYPE_REGISTRY: Record<string, { category: Category }> = {
 
   // network
   timeout: { category: "network" },
+  cancelled: { category: "network" },
   connection_refused: { category: "network" },
   dns_failure: { category: "network" },
   ssl_error: { category: "network" },
@@ -88,6 +89,7 @@ export const SUBTYPE_REGISTRY: Record<string, { category: Category }> = {
   conflict: { category: "api" },
   rate_limited: { category: "api" },
   server_error: { category: "api" },
+  http_error: { category: "api" },
 
   // policy
   content_blocked: { category: "policy" },

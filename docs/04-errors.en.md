@@ -181,8 +181,8 @@ This way, when an agent or a human sees `param`, they know which token on the co
 | authentication | `no_token`, `token_expired`, `token_revoked`                              |
 | authorization  | `missing_scope`, `app_permission_denied`, `forbidden`                     |
 | config         | `missing_config`, `invalid_config`, `unbound_env`, `skill_sync_failed`    |
-| network        | `timeout`, `connection_refused`, `dns_failure`, `ssl_error`               |
-| api            | `not_found`, `already_exists`, `conflict`, `rate_limited`, `server_error` |
+| network        | `timeout`, `cancelled`, `connection_refused`, `dns_failure`, `ssl_error`               |
+| api            | `not_found`, `already_exists`, `conflict`, `rate_limited`, `server_error`, `http_error` |
 | policy         | `content_blocked`, `challenge_required`, `access_denied`                  |
 | internal       | `decode_failure`, `unknown`, `contract_violation`                         |
 | confirmation   | `high_risk_write`                                                         |
@@ -220,23 +220,24 @@ Business packages may define their own subtypes, but must register them in the p
 
 Inside a business command's `run`, you call `ctx.get` / `ctx.post` etc. (returning `TransportResponse`, which contains `status`). Two handling modes:
 
-> **About automatic 401 renewal**: business packages usually do not handle 401 — the agent-cli-sdk request layer detects a 401 internally and automatically triggers a token refresh (singleflight deduplication), with the refresh capability provided by oauthProvider (see `05-credentials.md`). The two cooperate: the request layer handles "detection + single-flight dedup", while the provider handles "how to exchange the token". Business packages are unaware of this and only call `ctx.get`. The two modes below target **non-auth** business statuses (404/403/5xx, etc.).
+> **About automatic 401 renewal**: business packages usually do not handle 401 — the agent-cli-sdk request layer detects a 401 internally and automatically triggers a token refresh (singleflight deduplication), with the refresh capability provided by the auth plugin (see `05-credentials.md`). The two cooperate: the request layer handles "detection + single-flight dedup", while the auth plugin handles "how to exchange the token". Business packages are unaware of this and only call `ctx.get`. The two modes below target **non-auth** business statuses (404/403/5xx, etc.).
 
 ### Mode A: the command checks status itself and throws a typed error
 
 ```ts
 async run(ctx, { id }) {
-  const res = await ctx.get(`/orders/${id}`)
+  const res = await ctx.get(`/orders/${id}`, undefined, { allowHttpErrors: true })
   if (res.status === 404) throw new errs.NotFoundError(`order ${id} does not exist`)
   if (res.status === 403) throw new errs.PermissionError({ subtype: 'forbidden', message: 'not allowed to access this order' })
   if (res.status >= 500) throw new errs.APIError({ subtype: 'server_error', code: res.status, message: 'server error', retryable: true })
+  if (res.status >= 400) throw new errs.APIError({ subtype: "http_error", code: res.status, message: `HTTP ${res.status}` })
   return { data: res.data }
 }
 ```
 
 **Use when: the business package wants to give a specific status business semantics** (e.g. 404 = "order does not exist").
 
-### Mode B: enable auto-throw (agent-cli-sdk converts status by rule)
+### Mode B: default typed errors, with optional application mappings
 
 ```ts
 // configure in defineCli: which statuses auto-throw
@@ -261,7 +262,7 @@ The **value** of `errorOnStatus` **is a subtype string** (not a constructor name
 
 > If you configure a subtype that is not registered in the subtype registry, agent-cli-sdk fails validation at startup (and also fails in CI, preventing typos from silently shipping).
 
-When enabled, client.request automatically throws the matching typed error for matching statuses, so business packages don't hand-write ifs. **Disabled by default** (decision: business errors pass through the status without auto-throw — but business packages may opt in).
+HTTP 4xx/5xx throw typed errors by default in 2.0. `errorOnStatus` customizes their categories/subtypes. Explicit per-request `allowHttpErrors: true` bypasses this classification except for final 401. See [production contracts](09-production-contracts.en.md) for defaults, deadlines and cancellation.
 
 ---
 

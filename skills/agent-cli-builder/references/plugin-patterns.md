@@ -25,7 +25,7 @@ Use plugins for cross-cutting behavior such as authentication, fixed headers, si
 | `observeError`       | After an error is normalized         | Telemetry that cannot change the result              |
 | `handleError`        | After error observers                | Explicitly pass, replace, or recover                 |
 
-`enforce` supports `"pre"`, `"normal"`, and `"post"`; omitting it means `"normal"`. Hooks run pre, normal, then post, preserving registration order inside each tier. `setup` is not a hook: `defineCliApp` runs it for every plugin, in registration order, before routing compiles; a thrown error aborts startup.
+`enforce` supports `"pre"`, `"normal"`, and `"post"`; omitting it means `"normal"`. Command hooks run pre, normal, then post, preserving registration order inside each tier. App-level hooks run in registration order. `setup` is not a hook: `defineCliApp` runs it for every plugin, in registration order, before routing compiles; a thrown error aborts startup.
 
 Typical order:
 
@@ -37,7 +37,9 @@ Write lifecycle tests when two plugins depend on registration order.
 
 `observeInput` receives the route, input metadata and cloned `redactedArgs`; it never receives raw JSON. Register `sensitive` JSON Pointers in the root Zod schema metadata and keep observers telemetry-only. Observer failures are logged and cannot change command execution.
 
-App-level hooks (`onAppRun` / `afterAppRun`) are stricter: they fire exactly once per process run (help, `--version`, unknown routes, and errors included) and failures are silent so they cannot change the exit code or append an ambiguous warning after a machine-readable result. Use them only for optional operational awareness. Do not use them for audit events or any side effect that requires delivery. Prefer `afterAppRun` over per-command observers for run-scoped notices such as update awareness.
+App-level hooks (`onAppRun` / `afterAppRun`) are stricter: they fire exactly once per app.run invocation (help, `--version`, unknown routes, and errors included) and failures are silent so they cannot change the exit code or append an ambiguous warning after a machine-readable result. Use them only for optional operational awareness. Do not use them for audit events or any side effect that requires delivery. Prefer `afterAppRun` over per-command observers for run-scoped notices such as update awareness.
+
+In 2.x, ordinary requests await `observeRequest`. Caller cancellation stops waiting while started audit work continues; it does not guarantee rollback or completion before exit. Preserve request controls with `{ ...request }`; the executor retains caller signal and explicit timeout even when a plugin rebuilds the request. The default 30-second deadline covers physical HTTP and body reading, so bound the hook's own external I/O as well. Runtime composition dispatchers are imported from `/advanced`; ordinary plugins implement `Plugin`/`PluginFactory` without dispatching hooks themselves.
 
 ## 2. Common patterns
 

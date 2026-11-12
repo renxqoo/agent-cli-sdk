@@ -1,5 +1,8 @@
 # 02 · SDK 开发指南
 
+> 2.0 请求默认值、API 入口与迁移说明见[生产契约](09-production-contracts.md)。
+
+
 > 给**业务包开发者**看。讲清楚怎么用 `@renxqoo/agent-cli-sdk` 写一个业务包:目录结构、ctx、命令、插件、auth、分页、测试。这是开发者最常翻的文档。
 
 ---
@@ -260,11 +263,11 @@ defineCli<OrdersState>({ commands: ordersCommands, ... });
 interface CommandContext<State = {}> {
   // —— 请求方法(直接挂 ctx,无 client 层)——
   // T 是响应 body 类型,可选(不写则 data 是 unknown)
-  get<T = unknown>(path: string, query?: Record<string, unknown>): Promise<TransportResponse<T>>;
-  post<T = unknown>(path: string, body?: unknown): Promise<TransportResponse<T>>;
-  put<T = unknown>(path: string, body?: unknown): Promise<TransportResponse<T>>;
-  patch<T = unknown>(path: string, body?: unknown): Promise<TransportResponse<T>>;
-  delete<T = unknown>(path: string): Promise<TransportResponse<T>>;
+  get<T = unknown>(path: string, query?: Record<string, unknown>, controls?: RequestControls): Promise<TransportResponse<T>>;
+  post<T = unknown>(path: string, body?: unknown, controls?: RequestControls): Promise<TransportResponse<T>>;
+  put<T = unknown>(path: string, body?: unknown, controls?: RequestControls): Promise<TransportResponse<T>>;
+  patch<T = unknown>(path: string, body?: unknown, controls?: RequestControls): Promise<TransportResponse<T>>;
+  delete<T = unknown>(path: string, controls?: RequestControls): Promise<TransportResponse<T>>;
   request<T = unknown>(opts: RequestOptions): Promise<TransportResponse<T>>; // 低层兜底
 
   // —— state:插件间共享数据,强类型(defineCli<State> 声明)——
@@ -283,17 +286,20 @@ interface CommandContext<State = {}> {
     clear(namespace: string): Promise<void>;
   };
 
-  // —— 鉴权状态 ——
-  auth: { status(): AuthStatus; requireScope(scope: string): void };
 }
 
-interface RequestOptions {
+interface RequestControls {
+  timeout?: number;
+  signal?: AbortSignal;
+  allowHttpErrors?: boolean;
+}
+
+interface RequestOptions extends RequestControls {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
   query?: Record<string, unknown>;
   body?: unknown;
   headers?: Record<string, string>;
-  timeout?: number;
 }
 
 interface TransportResponse<T> {
@@ -411,8 +417,9 @@ export const getOrder = defineCommand({
     pos: ["id"],
   },
   async run(ctx, { id }) {
-    const res = await ctx.get<Order>(`/orders/${id}`);
+    const res = await ctx.get<Order>(`/orders/${id}`, undefined, { allowHttpErrors: true });
     if (res.status === 404) throw new errs.NotFoundError(`订单 ${id} 不存在`);
+    if (res.status >= 400) throw new errs.APIError({ subtype: "http_error", code: res.status, message: `HTTP ${res.status}` });
     return { data: res.data };
   },
 });
@@ -465,8 +472,9 @@ export const ordersCommands = defineCommands({
     description: "查询订单详情",
     args: { schema: z.object({ id: z.string() }), pos: ["id"] },
     async run(ctx, { id }) {
-      const res = await ctx.get<Order>(`/orders/${id}`);
+      const res = await ctx.get<Order>(`/orders/${id}`, undefined, { allowHttpErrors: true });
       if (res.status === 404) throw new errs.NotFoundError(`订单 ${id} 不存在`);
+      if (res.status >= 400) throw new errs.APIError({ subtype: "http_error", code: res.status, message: `HTTP ${res.status}` });
       return { data: res.data };
     },
   }),
@@ -909,6 +917,7 @@ defineCli<State>({
   commands: { ... },               // 必填:顶层命令组(key=命令名)→ rxcli-<name> <cmd>
   namespaces?: { ... },            // 可选:子命名空间组(key=子命名空间)→ rxcli-<name> <ns> <cmd>;单业务域不填
   skillsDir?: './skills',          // 可选:skill 目录(默认 ./skills)
+  requestTimeoutMs?: number, // default: 30_000
   errorOnStatus?: Record<number | `${number}xx`, string>,  // 可选:status→错误自动 throw
   messages?: { ... },              // 可选:引导文案 i18n
 })
@@ -1047,8 +1056,9 @@ export const ordersCommands = defineCommands({
     name: 'get', description: '查询订单详情',
     args: { schema: z.object({ id: z.string() }), pos: ['id'] },
     async run(ctx, { id }) {
-      const res = await ctx.get<Order>(`/orders/${id}`)
+      const res = await ctx.get<Order>(`/orders/${id}`, undefined, { allowHttpErrors: true })
       if (res.status === 404) throw new errs.NotFoundError(`订单 ${id} 不存在`)
+      if (res.status >= 400) throw new errs.APIError({ subtype: "http_error", code: res.status, message: `HTTP ${res.status}` });
       return { data: res.data }
     },
   }),

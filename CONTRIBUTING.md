@@ -5,7 +5,6 @@ Thanks for helping improve rxcli and `@renxqoo/agent-cli-sdk`.
 ## Before opening a change
 
 - Search existing issues and pull requests first.
-- Use an issue for security-sensitive reports only as described in `SECURITY.md`.
 - Keep changes focused. Public API changes must include motivation, migration notes, tests, and documentation.
 - Do not add compatibility branches for an obsolete API unless the maintainers explicitly approve them.
 
@@ -21,6 +20,7 @@ pnpm test
 pnpm lint          # oxlint (.oxlintrc.json)
 pnpm format:check  # oxfmt (.oxfmtrc.json); pnpm format rewrites files
 pnpm docs:check
+pnpm release:check --base HEAD
 pnpm --filter @renxqoo/agent-cli-sdk test:package
 ```
 
@@ -47,6 +47,6 @@ Publishing never changes versions automatically. A release pull request must upd
 ## [@scope/package@1.2.3] - YYYY-MM-DD
 ```
 
-Record public API changes, user-visible behavior, breaking changes, and migration instructions. The release gate rejects a package version change without its matching changelog entry.
+Record public API changes, user-visible behavior, breaking changes, and migration instructions. The release gate (`pnpm release:check --base <git-ref>`) validates SemVer, version increases, and one matching dated changelog entry. CI compares pull requests to their base SHA and main pushes to their previous SHA. Public API removals or changed default behavior require a major release and migration notes; the metadata gate does not infer every source-level breaking change.
 
 By participating, you agree to follow `CODE_OF_CONDUCT.md`.

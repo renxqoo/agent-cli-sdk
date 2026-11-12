@@ -1,5 +1,5 @@
 import type { PipeRecord } from "./output-contracts.js";
-import type { RequestOptions, TransportResponse } from "./request-contracts.js";
+import type { RequestControls, RequestOptions, TransportResponse } from "./request-contracts.js";
 
 export interface CredentialsApi {
   get(namespace: string): Promise<Record<string, string> | null>;
@@ -19,11 +19,27 @@ export interface LogApi {
 }
 
 export interface CommandContext<State = Record<string, never>> {
-  get<T = unknown>(path: string, query?: Record<string, unknown>): Promise<TransportResponse<T>>;
-  post<T = unknown>(path: string, body?: unknown): Promise<TransportResponse<T>>;
-  put<T = unknown>(path: string, body?: unknown): Promise<TransportResponse<T>>;
-  patch<T = unknown>(path: string, body?: unknown): Promise<TransportResponse<T>>;
-  delete<T = unknown>(path: string): Promise<TransportResponse<T>>;
+  get<T = unknown>(
+    path: string,
+    query?: Record<string, unknown>,
+    controls?: RequestControls,
+  ): Promise<TransportResponse<T>>;
+  post<T = unknown>(
+    path: string,
+    body?: unknown,
+    controls?: RequestControls,
+  ): Promise<TransportResponse<T>>;
+  put<T = unknown>(
+    path: string,
+    body?: unknown,
+    controls?: RequestControls,
+  ): Promise<TransportResponse<T>>;
+  patch<T = unknown>(
+    path: string,
+    body?: unknown,
+    controls?: RequestControls,
+  ): Promise<TransportResponse<T>>;
+  delete<T = unknown>(path: string, controls?: RequestControls): Promise<TransportResponse<T>>;
   request<T = unknown>(options: RequestOptions): Promise<TransportResponse<T>>;
   state: State;
   log: LogApi;

@@ -1,10 +1,19 @@
-export interface RequestOptions {
+/** Controls shared by ctx.request and the convenience HTTP methods. */
+export interface RequestControls {
+  /** Per-attempt timeout in milliseconds; defaults to the app setting, then 30 seconds. */
+  timeout?: number;
+  /** Caller cancellation survives preparation hooks and authentication retries. */
+  signal?: AbortSignal;
+  /** Return HTTP errors for command-specific handling. Final 401 still throws. */
+  allowHttpErrors?: boolean;
+}
+
+export interface RequestOptions extends RequestControls {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
   query?: Record<string, unknown>;
   body?: unknown;
   headers?: Record<string, string>;
-  timeout?: number;
 }
 
 export interface TransportResponse<T = unknown> {

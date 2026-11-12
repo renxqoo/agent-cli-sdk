@@ -1,5 +1,7 @@
 # 运行时重构与迁移
 
+> 本文保留此前运行时迁移的历史记录；2.0 的默认行为、导入路径及本轮验证请见[生产契约与迁移](09-production-contracts.md)。
+
 ## 目标与基线
 
 本次重构以 main 的 3e849c2 和已清理的 483 个有效用例为基线。运行时目标为 Node.js 26.0.0 及以上稳定版、Bun 1.4.0 及以上稳定版。构建与类型检查使用项目的 TypeScript、tsup 和 pnpm。
@@ -32,7 +34,7 @@
 | lockStaleAfterMs、releaseFileLock | 进程终止和持有连接关闭时由 SQLite 释放锁 |
 | SkillFileStore 注入接口 | SkillRepository 统一执行边界校验、独占生成和原子文件替换 |
 
-defineCliApp 接收 Plugin 或 PluginFactory。低层 defineCli 接收装配完成的 Plugin。需要显式装配时，先调用 setupPlugins，并把返回值交给 defineCli。
+defineCliApp 接收 Plugin 或 PluginFactory。低层 defineCli 接收装配完成的 Plugin。需要显式装配时，从 `@renxqoo/agent-cli-sdk/advanced` 导入并调用 setupPlugins，并把返回值交给 defineCli。
 
 ## 会话与事务
 

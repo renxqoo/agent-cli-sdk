@@ -60,7 +60,7 @@ const getCommand = defineCommand({
   description: "查询订单详情",
   args: { schema: z.object({ id: z.string() }), pos: ["id"] },
   async run(ctx, { id }) {
-    const res = await ctx.get(`/orders/${id}`);
+    const res = await ctx.get(`/orders/${id}`, undefined, { allowHttpErrors: true });
     if (res.status === 404) throw new errs.NotFoundError(`订单 ${id} 不存在`);
     return { data: res.data };
   },

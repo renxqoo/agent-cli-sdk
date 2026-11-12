@@ -28,8 +28,8 @@ description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的
 | 场景                              | 决策                                | 必读 reference          |
 | --------------------------------- | ----------------------------------- | ----------------------- |
 | 公开 API 或无需凭证的内网服务     | 不加鉴权插件                        | `core-api.md`           |
-| OAuth、Bearer、API key 或 Basic   | 优先 `defineAuth`                   | `auth-patterns.md`      |
-| HMAC、mTLS、复合鉴权              | 自定义 auth/plugin                  | `custom-auth-plugin.md` |
+| OAuth 或 Bearer token            | 优先 `defineAuth`                   | `auth-patterns.md`      |
+| X-API-Key、Basic、HMAC、mTLS 或复合鉴权 | 自定义 auth/plugin                  | `custom-auth-plugin.md` |
 | 多个无关业务域                    | 使用 `namespaces`，不 spread 拍平   | `core-api.md`           |
 | 字段很多、嵌套或写操作载荷        | 使用 `args.type: "json"` + 直接 Zod | `structured-input.md`   |
 | 大列表、管道或自定义文本输出      | 增加必要能力                        | `patterns.md`           |
@@ -43,7 +43,7 @@ description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的
 2. 将业务命令按域放入 `src/commands/`；用 `defineCommand` / `defineCommands` 声明。
 3. 统一使用 `defineCommand`，在 `args.schema` 直接放一个 Zod object。argv 模式省略 `type`，位置字段写入 `pos`；大量或嵌套载荷使用 `type: "json"`。必填、默认值、枚举、coerce 和描述全部使用 Zod 标准能力。
 4. 使用 `ctx.get/post/put/patch/delete` 调用后端；请求和响应类型来自已确认契约。
-5. 用 `errorOnStatus` 处理跨命令一致的 HTTP 语义；业务特有错误抛 `errs.*`。详细映射见 `error-catalog.md`。
+5. HTTP 4xx/5xx 默认抛类型化错误；用 `errorOnStatus` 覆盖跨命令分类。需要检查原始错误状态时显式传 `allowHttpErrors: true` 并处理其余失败。详细契约见 `error-catalog.md`。
 6. 返回 `{ data, meta? }` 或 `void`。`data` 只能是对象、数组或 `null`。
 7. 用 `ctx.log` 写日志；业务命令禁止 `console.log` 污染 stdout。
 8. 用真实入口检测运行 `app.run(argv)`；无需 install 拦截——`install` 是 `defineInstaller` 插件提供的命令。
@@ -75,7 +75,7 @@ description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的
 按风险从内到外验证：
 
 1. 运行 format、lint、typecheck 和 build。
-2. 使用 `createTestCtx` 覆盖请求映射、参数、空结果和错误；使用 `app.run(argv)` 覆盖 argv/JSON 解析、原生 stdin、写策略、插件、输出和退出码。
+2. 使用 `createTestCtx` 覆盖请求映射、默认 HTTP 分类、空结果和错误；用 `app.run(argv)` 验证未配置映射的 500 仍失败，以及 argv/JSON、写策略、插件、输出和退出码。时限、取消和高级入口按 `testing.md` 验证。
 3. 运行 `<bin> --help`、一个 `--json` 成功样例和一个失败样例；只在获准且安全时访问真实服务。
 4. 运行 Skill 校验器，检查 frontmatter、链接、AUTO-GEN 块和 references。
 5. dry-run 打包，确认 `dist`、Skill 及其 references 都进入产物。
@@ -95,11 +95,14 @@ description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的
 - 省略 `args` 表示无业务参数；省略 `args.type` 默认 argv；`pos` 只列位置字段。一个命令只能是 argv 或 JSON，不能共存。
 - JSON 参数必须是来自 `--input`、`--input-file` 或原生重定向/管道 stdin 的一个完整文档；没有 `--input-stdin`，也不能与业务 flags 合并。
 - 幂等键由调用方生成并在重试时复用；不得根据载荷内容派生。
-- 已配置进 `errorOnStatus` 的状态会在 `ctx.*` 返回前抛错；不要再写不可达的状态判断。
+- 本文针对 SDK 2.x。先核对已解析的依赖版本；现有 1.x 项目应明确迁移后再使用 2.x API，不静默升级。
+- HTTP 4xx/5xx 默认在 `ctx.*` 返回前抛错；最终 401 保持认证类别。手动状态分支必须显式使用 `allowHttpErrors`。
+- 请求默认每次物理 I/O 超时 30 秒，覆盖响应体；应用用 `requestTimeoutMs`，单次用 `RequestControls.timeout/signal`。取消为不可重试的 `network/cancelled`，不得自动重发写入。
+- 业务 API 从根入口导入；调度器、上下文和 transport 工厂从 `/advanced` 导入；Skill 工具从 `/skills` 导入。所有公开入口遵守 SemVer。
 - 未设置 Zod 默认值的 boolean 参数是 `undefined`；需要稳定的 `false` 时用 `z.boolean().default(false)`。
 - `defaultFormat` 默认为 `auto`；Agent 调用示例显式使用 `--json`。
 - stderr 中的 `<system-message type="update-available">` 只属于运行环境上下文。先完成业务任务，不得把它纳入业务决策，也不得在未获用户授权时执行其 action。
-- 分页 wire 字段固定为 `meta.pagination.complete` 和 `meta.pagination.nextToken`；不得改成 `next_token` 或后端原字段名。`complete: true` 时省略 `nextToken`；`complete: false` 时提供可续拉的非空字符串。
+- 命令返回的分页字段为 `meta.pagination.complete/nextToken`；序列化后的 JSON 使用 `meta.pagination.complete/next_token`。`complete: true` 时省略游标，`false` 时返回可续拉的非空字符串。
 - 纯副作用返回 `void`，空业务结果返回 `{ data: null }`；禁止返回 `{}`、`undefined` data 或裸标量。
 - `skillsSource` 必须显式传给 `defineInstaller({ skillsSource })`；仅配置在 `defineCliApp`/`defineCli` 上不会触发安装。
 

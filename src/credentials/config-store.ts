@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk/credentials —— ConfigStore 实现
+ * @myriosx/cli-kit/credentials —— ConfigStore 实现
  *
  * 设计依据:docs/05-credentials.md "凭证存储"。
  *   - 配置与凭证都按 namespace 分文件(每个业务包一份,互不覆盖)
@@ -36,7 +36,7 @@ import { writeAtomicFile } from "../infra/atomic-file.js";
 // ============================================================================
 
 export interface FileStoreOptions {
-  /** 必填:根目录(由业务 app 决定,agent-cli-sdk 不内置默认)。 */
+  /** 必填:根目录(由业务 app 决定,cli-kit 不内置默认)。 */
   dir: string;
   /**
    * transactCredentials 获取跨进程锁的最长等待(ms),用于 OAuth refresh 的读→改→写事务。

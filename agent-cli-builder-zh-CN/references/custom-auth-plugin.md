@@ -16,7 +16,7 @@
 
 ## 0. auth Plugin 是什么
 
-auth Plugin 就是一个普通的 `Plugin` 对象,用 agent-cli-sdk 导出的基础块组装。3 个出口的职责:
+auth Plugin 就是一个普通的 `Plugin` 对象,用 cli-kit 导出的基础块组装。3 个出口的职责:
 
 | 出口                 | 做什么                                                                            |
 | -------------------- | --------------------------------------------------------------------------------- |
@@ -39,7 +39,7 @@ import {
   type OAuthClientConfig,
   type PluginFactory,
   type TokenResult,
-} from "@renxqoo/agent-cli-sdk";
+} from "@myriosx/cli-kit";
 
 export function createCustomAuth<State>(options: {
   namespace: string;
@@ -225,7 +225,7 @@ export interface TokenResult {
 
 ```ts
 // src/hmac-provider.ts
-import type { CredentialProvider, ProviderContext, TokenResult } from "@renxqoo/agent-cli-sdk";
+import type { CredentialProvider, ProviderContext, TokenResult } from "@myriosx/cli-kit";
 
 export class HmacProvider implements CredentialProvider {
   constructor(private opts: { namespace: string; accessKeyId?: string }) {}
@@ -249,7 +249,7 @@ export class HmacProvider implements CredentialProvider {
 ```ts
 // src/hmac-sign-plugin.ts
 import { createHmac } from "node:crypto";
-import type { Plugin } from "@renxqoo/agent-cli-sdk";
+import type { Plugin } from "@myriosx/cli-kit";
 
 export function hmacSignPlugin(namespace: string): Plugin {
   return {
@@ -283,7 +283,7 @@ defineCli({
 
 ## 4. 401 自动续期(singleflight)
 
-**业务包不处理 401**,agent-cli-sdk 请求层自动:
+**业务包不处理 401**,cli-kit 请求层自动:
 
 1. 收到 401 → 调公开的 `handleUnauthorized` hook
 2. hook 用 `createOAuthRefresh({ cfg, store, namespace })` 创建,内部:
@@ -299,4 +299,4 @@ defineCli({
 
 `--api-key <key>` 是框架级一次性凭证,只定向提供给 auth provider chain,不会混入业务命令 args 或暴露给其他 telemetry/plugin hook;裸 `--api-key` 会在命令运行前得到 validation 错误。
 
-2.x 最终 401 不受 `allowHttpErrors` 豁免。调用方取消是不可重试的 `network/cancelled`；不要把它替换成过期认证，也不要再发起重试。等待共享刷新时，取消只结束当前等待，共享事务仍可完成。重建请求时保留 `...request`，不要丢失请求控制字段。需要 `createContext`、`createFetchAdapter` 或手动调度时从 `/advanced` 导入。
+0.0.1 最终 401 不受 `allowHttpErrors` 豁免。调用方取消是不可重试的 `network/cancelled`；不要把它替换成过期认证，也不要再发起重试。等待共享刷新时，取消只结束当前等待，共享事务仍可完成。重建请求时保留 `...request`，不要丢失请求控制字段。需要 `createContext`、`createFetchAdapter` 或手动调度时从 `/advanced` 导入。

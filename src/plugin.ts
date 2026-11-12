@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk —— 插件编排(vite 式)
+ * @myriosx/cli-kit —— 插件编排(vite 式)
  *
  * 设计依据:docs/02-sdk-guide.md "插件系统"。
  * 生命周期钩子按职责拆成 prepare / observe / handle / transform，避免 void 被解释为控制流。

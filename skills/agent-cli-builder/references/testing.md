@@ -28,7 +28,7 @@ Use mocks, sandboxes, or dedicated records for every write. Never use production
 `createTestCtx` mocks the low-level request, so every `get/post/...` call uses the same transport:
 
 ```ts
-import { createTestCtx } from "@renxqoo/agent-cli-sdk";
+import { createTestCtx } from "@myriosx/cli-kit";
 
 it("maps limit and returns items", async () => {
   let captured: { path?: string; query?: Record<string, unknown> } = {};

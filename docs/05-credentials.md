@@ -19,9 +19,9 @@ OAuth 端点统一按客户端类型发送身份：非空 `clientSecret` 使用 
 
 ---
 
-## agent-cli-sdk 出的基础块
+## cli-kit 出的基础块
 
-从主包 `@renxqoo/agent-cli-sdk` import,无需子路径:
+从主包 `@myriosx/cli-kit` import,无需子路径:
 
 | 基础块                                                                                                                                                        | 作用                                                                 |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -52,7 +52,7 @@ import {
   type OAuthClientConfig,
   type PluginFactory,
   type TokenResult,
-} from "@renxqoo/agent-cli-sdk";
+} from "@myriosx/cli-kit";
 
 export function createCustomAuth<State>(options: {
   namespace: string;
@@ -168,7 +168,7 @@ export interface CredentialProvider {
 
 export interface ProviderContext {
   namespace: string; // 命名空间
-  configStore: ConfigStore; // agent-cli-sdk 的配置存储(直接读写文件,不走 chain)
+  configStore: ConfigStore; // cli-kit 的配置存储(直接读写文件,不走 chain)
   args: Record<string, unknown>; // 命令参数(读 --api-key 等)
   env: NodeJS.ProcessEnv; // 环境变量
 }
@@ -246,7 +246,7 @@ defineCli({ plugins: [auth, signPlugin], ... })
 | **认证**(取 token、注入 header、填 user)         | `defineAuth`；特殊协议使用 provider chain | 把返回的 Plugin 放进 `plugins` |
 | **非认证横切**(固定参数、签名、格式、错误、审计) | 普通插件钩子                              | 直接写 Plugin 对象塞 plugins   |
 
-**provider chain 由 agent-cli-sdk 的 `resolveWithChain` 提供**,业务包不直接调 `credentials.register()`(已取消)。认证全部走自写的 auth Plugin(它调 provider chain),非认证横切用普通插件,不走 provider chain。
+**provider chain 由 cli-kit 的 `resolveWithChain` 提供**,业务包不直接调 `credentials.register()`(已取消)。认证全部走自写的 auth Plugin(它调 provider chain),非认证横切用普通插件,不走 provider chain。
 
 ---
 
@@ -271,7 +271,7 @@ app 通过 `defineCliApp({ dir })` 只决定一次根目录。装配器创建唯
 > **安全契约**:
 > - 凭证与配置以**明文 at-rest** 存储,仅依赖文件系统权限保护(不做混淆/加密)。如需 at-rest 加密,请在 OS keychain 等外部保管。
 > - `0600`(文件)/ `0700`(目录)仅在 **POSIX** 生效;Windows 不支持 chmod,文件 ACL 继承父目录。
-> - 存储目录由业务 app 通过 `defineCliApp({ dir })` 显式决定一次;`defineAuth`、`createUpdateNotifier`、`defineInstaller` 经 `setup(services)` 收到同一个 localState。agent-cli-sdk **不内置默认目录**,高层 API 一律不接收目录参数。
+> - 存储目录由业务 app 通过 `defineCliApp({ dir })` 显式决定一次;`defineAuth`、`createUpdateNotifier`、`defineInstaller` 经 `setup(services)` 收到同一个 localState。cli-kit **不内置默认目录**,高层 API 一律不接收目录参数。
 > - 凭证/配置文件读取走与命令输入相同的**严格有界解析器**(拒绝重复键、unsafe 键,限制深度/大小)。
 > - OAuth refresh 的「读 → 换 token → 写」事务由**跨进程文件锁**保护(`ConfigStore.transactCredentials`),避免并发 CLI 互相覆盖丢失更新。
 
@@ -290,7 +290,7 @@ app 通过 `defineCliApp({ dir })` 只决定一次根目录。装配器创建唯
 }
 ```
 
-字段都可选——OAuth 用 `token`/`refreshToken`/`expiresAt`,API key 用 `apiKey`,HMAC 用自定义字段(`accessKey`/`secretKey`)。agent-cli-sdk 不强制结构。
+字段都可选——OAuth 用 `token`/`refreshToken`/`expiresAt`,API key 用 `apiKey`,HMAC 用自定义字段(`accessKey`/`secretKey`)。cli-kit 不强制结构。
 
 ### 业务包运行时读写凭证
 
@@ -315,7 +315,7 @@ await ctx.credentials.clear("orders");
 
 ### ConfigStore 接口(provider 实现者用)
 
-`ProviderContext.configStore` 是 agent-cli-sdk 的配置/凭证存储抽象,直接读写磁盘文件(不走 provider chain)。接口:
+`ProviderContext.configStore` 是 cli-kit 的配置/凭证存储抽象,直接读写磁盘文件(不走 provider chain)。接口:
 
 ```ts
 export interface ConfigStore {
@@ -341,7 +341,7 @@ export interface ConfigStore {
 
 ## 首次引导
 
-provider chain 全都没命中时,auth Plugin 抛 `AuthenticationError`,agent-cli-sdk 触发首次引导(交互式 TTY 才触发,CI/非交互环境直接报错):
+provider chain 全都没命中时,auth Plugin 抛 `AuthenticationError`,cli-kit 触发首次引导(交互式 TTY 才触发,CI/非交互环境直接报错):
 
 ```bash
 $ rxcli-orders list
@@ -370,7 +370,7 @@ $ rxcli-orders list
 
 ## 凭证脱敏(日志纪律)
 
-凭证值**绝不**进 stdout/stderr 的可见输出。agent-cli-sdk 强制:
+凭证值**绝不**进 stdout/stderr 的可见输出。cli-kit 强制:
 
 - `ctx.log` 打印请求时,认证 header 自动脱敏:`Authorization: Bearer ey...` → `Authorization: Bearer [REDACTED]`
 - 错误消息里若混入凭证,`handleError` 插件要脱敏(见 `04-errors.md`)

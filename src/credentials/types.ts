@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk/credentials —— 凭证与 provider chain 类型
+ * @myriosx/cli-kit/credentials —— 凭证与 provider chain 类型
  *
  * 设计依据:docs/05-credentials.md。
  * 两层 API 对照(方法名故意不同,避免混用):
@@ -82,7 +82,7 @@ export interface OAuthSessionRef {
 export interface ProviderContext {
   /** 命名空间。 */
   namespace: string;
-  /** agent-cli-sdk 的配置存储(provider 内部直接读写文件,不走 chain)。 */
+  /** cli-kit 的配置存储(provider 内部直接读写文件,不走 chain)。 */
   configStore: ConfigStore;
   /** 命令参数(读 --api-key 等)。 */
   args: Record<string, unknown>;

@@ -7,7 +7,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageDir = join(dirname(fileURLToPath(import.meta.url)), "..");
-const temporaryDir = mkdtempSync(join(tmpdir(), "agent-cli-sdk-package-"));
+const temporaryDir = mkdtempSync(join(tmpdir(), "cli-kit-package-"));
 const subprocessEnv = {
   ...process.env,
   npm_config_cache: join(temporaryDir, "npm-cache"),
@@ -102,13 +102,13 @@ try {
   writeFileSync(
     join(consumerDir, "smoke.mjs"),
     [
-      'import { defineCliApp, defineCommand, defineAuth, createMemoryLocalState, errs } from "@renxqoo/agent-cli-sdk";',
-      'import * as errorExports from "@renxqoo/agent-cli-sdk/errs";',
-      'import * as credentialExports from "@renxqoo/agent-cli-sdk/credentials";',
-      'import * as skillExports from "@renxqoo/agent-cli-sdk/skills";',
+      'import { defineCliApp, defineCommand, defineAuth, createMemoryLocalState, errs } from "@myriosx/cli-kit";',
+      'import * as errorExports from "@myriosx/cli-kit/errs";',
+      'import * as credentialExports from "@myriosx/cli-kit/credentials";',
+      'import * as skillExports from "@myriosx/cli-kit/skills";',
       'import * as z from "zod";',
-      'import * as sdk from "@renxqoo/agent-cli-sdk";',
-      'import * as advanced from "@renxqoo/agent-cli-sdk/advanced";',
+      'import * as sdk from "@myriosx/cli-kit";',
+      'import * as advanced from "@myriosx/cli-kit/advanced";',
       "for (const removed of ['applyPlugins', 'createOn401Hook', 'resolveIdentityWithChain']) if (removed in sdk) throw new Error('removed API exported: ' + removed);",
       "for (const moved of ['runCommand', 'setupPlugins', 'createContext', 'createFetchAdapter', 'generateAutogenBlock']) if (moved in sdk) throw new Error('advanced API leaked into root: ' + moved);",
       "if (!advanced.runCommand || !advanced.setupPlugins || !advanced.createContext || !advanced.createFetchAdapter) throw new Error('advanced subpath failed');",
@@ -156,16 +156,16 @@ try {
   writeFileSync(
     join(consumerDir, "types.mts"),
     [
-      'import { defineCli, type CommandContext, type RequestControls } from "@renxqoo/agent-cli-sdk";',
-      'import { createContext, setupPlugins } from "@renxqoo/agent-cli-sdk/advanced";',
-      'import { generateAutogenBlock } from "@renxqoo/agent-cli-sdk/skills";',
+      'import { defineCli, type CommandContext, type RequestControls } from "@myriosx/cli-kit";',
+      'import { createContext, setupPlugins } from "@myriosx/cli-kit/advanced";',
+      'import { generateAutogenBlock } from "@myriosx/cli-kit/skills";',
       "declare const ctx: CommandContext;",
       "const controls: RequestControls = { timeout: 100, signal: new AbortController().signal };",
       'void ctx.get<{id:string}>("/items", undefined, controls);',
       'void ctx.delete("/items/1", controls);',
       'defineCli({name:"types",description:"fixture",commands:{},requestTimeoutMs:100});',
       "// @ts-expect-error Runtime dispatchers are not part of the root API.",
-      'import { runCommand } from "@renxqoo/agent-cli-sdk";',
+      'import { runCommand } from "@myriosx/cli-kit";',
       "void [createContext,setupPlugins,generateAutogenBlock,runCommand];",
     ].join("\n"),
   );

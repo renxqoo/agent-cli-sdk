@@ -139,4 +139,4 @@ pnpm --filter {{package-name}} test
 - [ ] Skill 安装步骤和 README 面向人的步骤语义一致。
 - [ ] pack dry-run 包含 README、dist 和全部 Skill 文件。
 
-基于 2.x 的 README 应说明 HTTP 错误默认失败、默认 30 秒时限、实际使用的 `requestTimeoutMs`，以及取消不等同后端写入回滚。若存在手动状态恢复，核对 `allowHttpErrors` 和其余错误处理。升级说明列出根入口到 `/advanced`、`/skills` 的导入迁移；不要声称尚未发布的版本已经可从 npm 安装。
+基于 0.0.1 的 README 应说明 HTTP 错误默认失败、默认 30 秒时限、实际使用的 `requestTimeoutMs`，以及取消不等同后端写入回滚。若存在手动状态恢复，核对 `allowHttpErrors` 和其余错误处理。升级说明列出根入口到 `/advanced`、`/skills` 的导入迁移；不要声称尚未发布的版本已经可从 npm 安装。

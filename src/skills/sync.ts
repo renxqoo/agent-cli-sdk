@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk/skills —— skill 同步(到多个 AI agent 工具发现目录)
+ * @myriosx/cli-kit/skills —— skill 同步(到多个 AI agent 工具发现目录)
  *
  * 设计依据:docs/06-skills.md "skill 同步机制"。
  * 实现 skills 同步:把业务包的 skills 目录同步到多个 AI agent 工具的标准发现路径。

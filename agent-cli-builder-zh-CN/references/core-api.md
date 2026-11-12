@@ -1,8 +1,8 @@
 # 核心实现契约（中文）
 
-2.0 默认将 HTTP 4xx/5xx 转为类型化错误；`errorOnStatus` 覆盖默认分类。应用通过 `requestTimeoutMs` 设置时限（默认 30,000 ms）。HTTP 快捷方法末尾接受 `RequestControls`，含 `timeout`、`signal`、显式 `allowHttpErrors`；自行检查响应时须处理全部错误状态。运行时调度/上下文工厂使用 `/advanced`，Skill 工具使用 `/skills`。
+0.0.1 默认将 HTTP 4xx/5xx 转为类型化错误；`errorOnStatus` 覆盖默认分类。应用通过 `requestTimeoutMs` 设置时限（默认 30,000 ms）。HTTP 快捷方法末尾接受 `RequestControls`，含 `timeout`、`signal`、显式 `allowHttpErrors`；自行检查响应时须处理全部错误状态。运行时调度/上下文工厂使用 `/advanced`，Skill 工具使用 `/skills`。
 
-每次使用 `agent-cli-builder` 实现 CLI 前读取本文件。内容以当前 `@renxqoo/agent-cli-sdk` 源码契约为准。
+每次使用 `agent-cli-builder` 实现 CLI 前读取本文件。内容以当前 `@myriosx/cli-kit` 源码契约为准。
 
 ## 导航
 
@@ -38,7 +38,7 @@
 ## 2. 命令定义
 
 ```ts
-import { defineCommand, defineCommands } from "@renxqoo/agent-cli-sdk";
+import { defineCommand, defineCommands } from "@myriosx/cli-kit";
 import * as z from "zod";
 
 export const todoCommands = defineCommands({
@@ -104,7 +104,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { defineCliApp } from "@renxqoo/agent-cli-sdk";
+import { defineCliApp } from "@myriosx/cli-kit";
 import { todoCommands } from "./commands/todos.js";
 
 const app = await defineCliApp({
@@ -172,7 +172,7 @@ export default app;
 请求类型必须描述真实响应。不要用 `any` 或多字段 fallback 掩盖未知 API 契约。
 
 
-### 2.x 请求控制与入口
+### 0.0.1 请求控制与入口
 
 GET 的控制参数位于 query 后，POST/PUT/PATCH 位于 body 后，DELETE 位于 path 后：
 
@@ -185,7 +185,7 @@ const response = await ctx.get("/orders", { limit: 20 }, {
 
 默认每次物理请求 30 秒，应用通过 `requestTimeoutMs` 配置。时限包含响应体读取，不包含插件和共享 OAuth 刷新；需要覆盖完整请求等待时传 `signal`。取消结束调用方等待，已启动的审计/共享刷新可继续，已完成的后端写入不会回滚。`allowHttpErrors: true` 只适合确需检查错误响应的调用，最终 401 仍抛认证错误。
 
-业务工厂、类型和认证基础块保留根入口；`setupPlugins`、`runCommand`、`createContext`、`createFetchAdapter` 等从 `@renxqoo/agent-cli-sdk/advanced` 导入；`generateAutogenBlock`、`syncSkills` 等从 `/skills` 导入。先核对实际安装版本，本文的 2.x 接口不适用于未迁移的 1.x 项目。
+业务工厂、类型和认证基础块保留根入口；`setupPlugins`、`runCommand`、`createContext`、`createFetchAdapter` 等从 `@myriosx/cli-kit/advanced` 导入；`generateAutogenBlock`、`syncSkills` 等从 `/skills` 导入。先核对实际安装版本，本文的 0.0.1 接口不适用于尚未迁移旧接口的项目。
 
 ## 5. 输出、错误与日志
 

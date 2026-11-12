@@ -1,6 +1,6 @@
 # 03 · 输出契约
 
-> 统一输出格式是 agent-cli-sdk 最核心的数据结构。所有 stdout 输出必须是成功输出,所有 stderr 错误必须是错误输出。本文档定义它们的精确字段、稳定性保证、stdout/stderr 分配规则。**agent 和实现者都必须遵守这个契约。**
+> 统一输出格式是 cli-kit 最核心的数据结构。所有 stdout 输出必须是成功输出,所有 stderr 错误必须是错误输出。本文档定义它们的精确字段、稳定性保证、stdout/stderr 分配规则。**agent 和实现者都必须遵守这个契约。**
 
 ---
 
@@ -21,9 +21,9 @@
 
 **统一输出格式是 wire 格式(JSON on the wire),字段名一律 snake_case**:如 `next_token`、`missing_scopes`、`dry_run`。这符合 JSON/wire 惯例(lark-cli、多数 REST API 都如此),agent 和 shell 工具(jq)按 snake_case 取值。
 
-**TS 代码用 camelCase**:`meta.pagination.nextToken`、`err.missingScopes`。agent-cli-sdk 在把命令 `run` 的返回值(`CommandResult`)序列化成统一输出格式时,**自动把 camelCase 转成 snake_case** 写入 wire,业务包写代码用 camelCase,不用手动转换。
+**TS 代码用 camelCase**:`meta.pagination.nextToken`、`err.missingScopes`。cli-kit 在把命令 `run` 的返回值(`CommandResult`)序列化成统一输出格式时,**自动把 camelCase 转成 snake_case** 写入 wire,业务包写代码用 camelCase,不用手动转换。
 
-> 即:本文档所有 JSON 示例里的字段名是 wire 形态(snake_case);`02-sdk-guide.md` 里 TS 代码的字段名是代码形态(camelCase)。两者一一对应,agent-cli-sdk 负责转换。`ok` / `data` / `meta` 等单词本身无连字符,两种形态一致。
+> 即:本文档所有 JSON 示例里的字段名是 wire 形态(snake_case);`02-sdk-guide.md` 里 TS 代码的字段名是代码形态(camelCase)。两者一一对应,cli-kit 负责转换。`ok` / `data` / `meta` 等单词本身无连字符,两种形态一致。
 
 ---
 
@@ -119,13 +119,13 @@
 run / 钩子 throw err
   ↓
 err 是 errs.* 类型? → 是:直接进 observeError/handleError 链
-  ↓ 否(裸 Error 等):agent-cli-sdk 包装成 InternalError(unknown)进 observeError/handleError 链
+  ↓ 否(裸 Error 等):cli-kit 包装成 InternalError(unknown)进 observeError/handleError 链
 observeError/handleError 链(pre→normal→post 插件,每个都跑;不处理返回原 err,处理返回新 err)
   ↓
 最终 err → 按 Category 渲染错误输出 → stderr + 对应 exit code
 ```
 
-**关键:throw 必须用 `errs.*` 类型化错误。** 裸 `throw new Error('...')` 会被兜底成 `internal/unknown`(exit 5),agent 会误解成 agent-cli-sdk bug。详见 `04-errors.md`。
+**关键:throw 必须用 `errs.*` 类型化错误。** 裸 `throw new Error('...')` 会被兜底成 `internal/unknown`(exit 5),agent 会误解成 cli-kit bug。详见 `04-errors.md`。
 
 ### 顶层字段(与成功输出一致)
 
@@ -168,10 +168,10 @@ observeError/handleError 链(pre→normal→post 插件,每个都跑;不处理�
 | 内容                       | 流         | 谁写                      |
 | -------------------------- | ---------- | ------------------------- |
 | 成功输出(`{ok:true,...}`)  | **stdout** | 框架从 `run` 返回值序列化 |
-| 错误输出(`{ok:false,...}`) | **stderr** | agent-cli-sdk 错误渲染层        |
+| 错误输出(`{ok:false,...}`) | **stderr** | cli-kit 错误渲染层        |
 | 日志(info/warn/error)      | **stderr** | `ctx.log.*()`             |
-| 进度条 / spinner           | **stderr** | agent-cli-sdk 进度层            |
-| 提示(空结果、引导)         | **stderr** | agent-cli-sdk 提示层            |
+| 进度条 / spinner           | **stderr** | cli-kit 进度层            |
+| 提示(空结果、引导)         | **stderr** | cli-kit 提示层            |
 | 系统通知(例如版本更新)     | **stderr** | `createUpdateNotifier`    |
 
 **业务命令永远不能直接往 stdout 写非统一输出格式内容。** 一切非数据输出走 `ctx.log`(stderr)。否则 `rxcli-orders list | jq` 混进一行"加载中..."整个管道就废了。
@@ -181,7 +181,7 @@ observeError/handleError 链(pre→normal→post 插件,每个都跑;不处理�
 版本提醒是运行环境信息，不是业务数据。业务包可显式注册 `createUpdateNotifier`：
 
 ```ts
-import { createUpdateNotifier, defineCliApp } from "@renxqoo/agent-cli-sdk";
+import { createUpdateNotifier, defineCliApp } from "@myriosx/cli-kit";
 
 const app = await defineCliApp({
   dir: appStateDir,
@@ -249,7 +249,7 @@ if (!loggedIn) throw new errs.BareError(3); // exit 3,stderr 不输出统一格�
 
 **空结果 ≠ 错误。** exit code 0,stdout 是空数组统一输出格式。不要把空结果当错误抛(那样 agent 会误以为出问题了)。
 
-可选:agent-cli-sdk 在 stderr 提示一行"(0 条记录)"给人类,但 stdout 保持纯净。
+可选:cli-kit 在 stderr 提示一行"(0 条记录)"给人类,但 stdout 保持纯净。
 
 ---
 
@@ -273,7 +273,7 @@ if (!loggedIn) throw new errs.BareError(3); // exit 3,stderr 不输出统一格�
 | `data` |    ❌    | payload(已过 `transformOutput` 转换)                                                                                          |
 | `meta` |    ❌    | 可选元数据(来源命令、时间戳)                                                                                                  |
 
-> **注意:PipeRecord 是下游 `ctx.pipe.in()` 读到的形态,不是 stdout 统一输出格式本身。** stdout 仍是一个完整统一输出格式 `{ok, data, meta}`;当 data 是数组时,agent-cli-sdk 把每条记录包成 PipeRecord 供下游逐条消费。单对象命令(data 不是数组)管道时,下游收到的是单条 `{type, id, data}`。
+> **注意:PipeRecord 是下游 `ctx.pipe.in()` 读到的形态,不是 stdout 统一输出格式本身。** stdout 仍是一个完整统一输出格式 `{ok, data, meta}`;当 data 是数组时,cli-kit 把每条记录包成 PipeRecord 供下游逐条消费。单对象命令(data 不是数组)管道时,下游收到的是单条 `{type, id, data}`。
 
 详见 `02-sdk-guide.md` 的"管道:作为下游命令"。
 
@@ -296,7 +296,7 @@ if (!loggedIn) throw new errs.BareError(3); // exit 3,stderr 不输出统一格�
 ## 输出契约的稳定性承诺
 
 - `ok`、`error.type`、`error.subtype`、`error.code`、`error.retryable` 是 **wire-stable**,跨大版本不变。改名是 breaking change。
-- `data` 和 `meta.pagination` 的形状由业务命令决定,agent-cli-sdk 只保证 `ok`/`data`/`meta` 这三个顶层 key 稳定。
+- `data` 和 `meta.pagination` 的形状由业务命令决定,cli-kit 只保证 `ok`/`data`/`meta` 这三个顶层 key 稳定。
 - `message` / `hint` 文案可能改进,agent 不要基于具体文字分支。
 - 新增顶层字段(如未来的 `_deprecation`)用下划线前缀,表示非业务字段,老 consumer 忽略它不会出错。
 

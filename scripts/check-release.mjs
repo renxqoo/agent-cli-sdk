@@ -43,9 +43,10 @@ function compareVersions(left, right) {
 export function validateRelease(current, previous, changelog) {
   const next = parseVersion(current.version);
   const before = parseVersion(previous.version);
-  if (current.name !== previous.name)
-    throw new Error("Package renames require a separate release migration");
-  if (current.version !== previous.version && compareVersions(next, before) <= 0) {
+  const renamed = current.name !== previous.name;
+  if (renamed && current.version !== "0.0.1")
+    throw new Error("Package renames must start at version 0.0.1");
+  if (!renamed && current.version !== previous.version && compareVersions(next, before) <= 0) {
     throw new Error(
       "Package version must increase; build metadata alone is not a version increment",
     );

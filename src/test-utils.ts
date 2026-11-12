@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk —— createTestCtx(测试用 mock ctx)
+ * @myriosx/cli-kit —— createTestCtx(测试用 mock ctx)
  *
  * 设计依据:docs/02-sdk-guide.md "测试:vitest + createTestCtx"。
  * 业务包用它 mock ctx 测 run 逻辑:mock request 方法(高层 get/post 都走 request,

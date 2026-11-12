@@ -25,7 +25,7 @@ import {
   type OAuthClientConfig,
   type PluginFactory,
   type TokenResult,
-} from "@renxqoo/agent-cli-sdk";
+} from "@myriosx/cli-kit";
 
 export function createCustomAuth<State>(options: {
   namespace: string;
@@ -208,4 +208,4 @@ With `handleUnauthorized` configured, the request runtime:
 
 The plugin must update its context-bound session before retry hooks run. Re-signing plugins must recompute timestamps, nonces, and signatures on retry. Business commands should not implement a second 401 retry loop.
 
-In 2.x, `allowHttpErrors` never bypasses final 401. Caller cancellation is non-retryable `network/cancelled`; do not relabel it as expired auth or start another retry. Cancellation stops the caller waiting for shared refresh without cancelling that transaction. Preserve `...request` and its controls. Import context/adapter factories and runtime dispatchers from `/advanced` when composing a runtime.
+In 0.0.1, `allowHttpErrors` never bypasses final 401. Caller cancellation is non-retryable `network/cancelled`; do not relabel it as expired auth or start another retry. Cancellation stops the caller waiting for shared refresh without cancelling that transaction. Preserve `...request` and its controls. Import context/adapter factories and runtime dispatchers from `/advanced` when composing a runtime.

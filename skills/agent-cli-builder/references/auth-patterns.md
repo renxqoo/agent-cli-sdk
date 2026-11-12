@@ -24,7 +24,7 @@ Use `defineAuth` for OAuth and Bearer tokens. Read `custom-auth-plugin.md` for X
 The factory is synchronous. Async assembly (reading config, fetching metadata) happens in the plugin's `setup(services)`, which `defineCliApp` runs automatically before routing compiles:
 
 ```ts
-import { defineCliApp, defineAuth } from "@renxqoo/agent-cli-sdk";
+import { defineCliApp, defineAuth } from "@myriosx/cli-kit";
 import { homedir } from "node:os";
 import { join } from "node:path";
 

@@ -18,7 +18,7 @@
 
 ```ts
 import * as z from 'zod'
-import { defineCommand } from '@renxqoo/agent-cli-sdk'
+import { defineCommand } from '@myriosx/cli-kit'
 
 export const list = defineCommand({
   name: 'list',
@@ -71,7 +71,7 @@ export const list = defineCommand({
 
 ```ts
 import * as z from 'zod'
-import { defineCommand, errs } from '@renxqoo/agent-cli-sdk'
+import { defineCommand, errs } from '@myriosx/cli-kit'
 
 export const generate = defineCommand({
   name: 'generate',
@@ -125,7 +125,7 @@ JSON 参数命令会独占原生 stdin 读取完整 JSON 文档；该次调用�
 不声明 `humanFormat` 时,框架兜底渲染(对象数组→表格,单对象→key:value 详情)。想精致化用框架导出的 `printTable`(内置 CJK 宽度对齐,中文按 2 列):
 
 ```ts
-import { defineCommand, printTable } from '@renxqoo/agent-cli-sdk'
+import { defineCommand, printTable } from '@myriosx/cli-kit'
 
 export const list = defineCommand({
   name: 'list',

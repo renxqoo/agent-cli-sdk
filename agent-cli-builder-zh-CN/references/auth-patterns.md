@@ -62,7 +62,7 @@ const auth = defineAuth({                  // 同步工厂,禁止 await;异步�
 ### 最小用法
 
 ```ts
-import { defineCliApp, defineAuth } from "@renxqoo/agent-cli-sdk";
+import { defineCliApp, defineAuth } from "@myriosx/cli-kit";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -166,7 +166,7 @@ const app = await defineCliApp({
 
 ## 3. 凭证存储路径(隔离多 CLI)
 
-存储目录由 app 显式决定(agent-cli-sdk **无默认目录**,不自动隔离)。在同一目录内,**配置与凭证都**靠 `credentialNamespace` 区分:
+存储目录由 app 显式决定(cli-kit **无默认目录**,不自动隔离)。在同一目录内,**配置与凭证都**靠 `credentialNamespace` 区分:
 
 ```
 <dir>/
@@ -204,7 +204,7 @@ const app = await defineCliApp({
 });
 ```
 
-> agent-cli-sdk 不内置默认目录，app 用 `defineCliApp({ dir })` 决定一次；装配器把唯一 localState 经 `setup(services)` 注入 `defineAuth`、`defineInstaller`、`createUpdateNotifier`。测试使用 `defineCliApp({ localState: createMemoryLocalState(...) })`。高层 API 不保留 `store`、`configDir`、`cacheDir`、`localState` 兼容参数。
+> cli-kit 不内置默认目录，app 用 `defineCliApp({ dir })` 决定一次；装配器把唯一 localState 经 `setup(services)` 注入 `defineAuth`、`defineInstaller`、`createUpdateNotifier`。测试使用 `defineCliApp({ localState: createMemoryLocalState(...) })`。高层 API 不保留 `store`、`configDir`、`cacheDir`、`localState` 兼容参数。
 
 ### 安全边界
 

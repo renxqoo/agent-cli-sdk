@@ -2,7 +2,7 @@
 
 HTTP 4xx/5xx throw by default in 2.0. `errorOnStatus` overrides default classification. Set `requestTimeoutMs` on the app (default 30,000 ms). All HTTP helpers accept final `RequestControls` with `timeout`, `signal`, and explicit `allowHttpErrors`; handle all error statuses when opting into inspection. Runtime dispatch/context factories use `/advanced`; Skill utilities use `/skills`.
 
-Read this file before implementing any CLI with `agent-cli-builder`. It reflects the current `@renxqoo/agent-cli-sdk` source contract.
+Read this file before implementing any CLI with `agent-cli-builder`. It reflects the current `@myriosx/cli-kit` source contract.
 
 ## Contents
 
@@ -38,7 +38,7 @@ Keep only scripts that actually run, typically `build`, `typecheck`, `test`, and
 ## 2. Command definitions
 
 ```ts
-import { defineCommand, defineCommands } from "@renxqoo/agent-cli-sdk";
+import { defineCommand, defineCommands } from "@myriosx/cli-kit";
 import * as z from "zod";
 
 export const todoCommands = defineCommands({
@@ -104,7 +104,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { defineCliApp } from "@renxqoo/agent-cli-sdk";
+import { defineCliApp } from "@myriosx/cli-kit";
 import { todoCommands } from "./commands/todos.js";
 
 const app = await defineCliApp({
@@ -166,7 +166,7 @@ Every command receives `run(ctx, args)`. In argv and JSON mode alike, `args` is 
 
 Type requests from the verified API. Do not use `any` or multi-field fallbacks to conceal an unknown contract.
 
-### 2.x request controls and entry points
+### 0.0.1 request controls and entry points
 
 GET accepts controls after query; POST/PUT/PATCH after body; DELETE after path:
 
@@ -183,7 +183,7 @@ const response = await ctx.get(
 
 The default is 30 seconds per physical attempt, configurable through app `requestTimeoutMs`. It includes body reading, not plugin work or shared OAuth refresh; pass `signal` to cover the complete request wait. Cancellation stops the caller waiting; started audit/refresh work may continue and upstream writes are not rolled back. Use `allowHttpErrors: true` only for explicit status inspection; final 401 still throws.
 
-Business factories, types and auth primitives remain at the root. Import `setupPlugins`, `runCommand`, `createContext`, `createFetchAdapter` and other runtime composition helpers from `@renxqoo/agent-cli-sdk/advanced`; import `generateAutogenBlock`, `syncSkills` and other Skill helpers from `/skills`. Check the installed version: these 2.x interfaces do not apply to an unmigrated 1.x project.
+Business factories, types and auth primitives remain at the root. Import `setupPlugins`, `runCommand`, `createContext`, `createFetchAdapter` and other runtime composition helpers from `@myriosx/cli-kit/advanced`; import `generateAutogenBlock`, `syncSkills` and other Skill helpers from `/skills`. Check the installed version: these 0.0.1 interfaces require explicit migration for projects using earlier APIs.
 
 ## 5. Output, errors, and logs
 

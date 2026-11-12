@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk/skills —— 命令文档自动生成(gen)
+ * @myriosx/cli-kit/skills —— 命令文档自动生成(gen)
  *
  * 设计依据:docs/06-skills.md "自动文档生成"、"命令签名生成规则"。
  * 核心机制:AUTO-GEN 标记块(preserved regions)。

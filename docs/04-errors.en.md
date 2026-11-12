@@ -1,12 +1,12 @@
 # 04 · Error categories and exit codes
 
-> agent-cli-sdk turns "command failure" into a structured signal an agent can branch on precisely, using 9 typed error categories plus an exit-code mapping. Business packages throw typed errors, and agent-cli-sdk uniformly renders them as error output to stderr. This document defines the 9 Categories, constructor signatures, hint conventions, and when to throw.
+> cli-kit turns "command failure" into a structured signal an agent can branch on precisely, using 9 typed error categories plus an exit-code mapping. Business packages throw typed errors, and cli-kit uniformly renders them as error output to stderr. This document defines the 9 Categories, constructor signatures, hint conventions, and when to throw.
 
 ---
 
 ## Design principles
 
-1. **Business packages only throw typed errors**, never a bare `Error`. agent-cli-sdk catches them and renders them into a unified output format (see `03-envelopes.md`). **A bare `throw new Error(...)` falls back to `internal/unknown` (exit 5)**, which the agent will misread as an agent-cli-sdk bug — so always use `errs.*`.
+1. **Business packages only throw typed errors**, never a bare `Error`. cli-kit catches them and renders them into a unified output format (see `03-envelopes.md`). **A bare `throw new Error(...)` falls back to `internal/unknown` (exit 5)**, which the agent will misread as an cli-kit bug — so always use `errs.*`.
 2. **The exit code is determined by the Category**; business packages do not set exit codes themselves.
 3. **The hint field is an executable instruction for the agent**, not an explanation for humans.
 4. **Wrapping an error must not downgrade it**: when a lower layer already returned a typed error, pass it through without re-wrapping.
@@ -36,7 +36,7 @@ The error taxonomy aligns with lark-cli's RFC 7807 approach (see `00-overview.md
 
 ## Constructor signatures
 
-All error types inherit from `errs.CliError` (embedding `Problem`) and live in `@renxqoo/agent-cli-sdk/errs`.
+All error types inherit from `errs.CliError` (embedding `Problem`) and live in `@myriosx/cli-kit/errs`.
 
 ### Common Problem structure
 
@@ -55,7 +55,7 @@ interface Problem {
 ### Constructor usage
 
 ```ts
-import { errs } from "@renxqoo/agent-cli-sdk";
+import { errs } from "@myriosx/cli-kit";
 
 // ① Argument error (user input is wrong)
 throw new errs.ValidationError({
@@ -187,7 +187,7 @@ This way, when an agent or a human sees `param`, they know which token on the co
 | internal       | `decode_failure`, `unknown`, `contract_violation`                         |
 | confirmation   | `high_risk_write`                                                         |
 
-Business packages may define their own subtypes, but must register them in the package's subtype declaration file (agent-cli-sdk will provide lint validation later).
+Business packages may define their own subtypes, but must register them in the package's subtype declaration file (cli-kit will provide lint validation later).
 
 ---
 
@@ -220,7 +220,7 @@ Business packages may define their own subtypes, but must register them in the p
 
 Inside a business command's `run`, you call `ctx.get` / `ctx.post` etc. (returning `TransportResponse`, which contains `status`). Two handling modes:
 
-> **About automatic 401 renewal**: business packages usually do not handle 401 — the agent-cli-sdk request layer detects a 401 internally and automatically triggers a token refresh (singleflight deduplication), with the refresh capability provided by the auth plugin (see `05-credentials.md`). The two cooperate: the request layer handles "detection + single-flight dedup", while the auth plugin handles "how to exchange the token". Business packages are unaware of this and only call `ctx.get`. The two modes below target **non-auth** business statuses (404/403/5xx, etc.).
+> **About automatic 401 renewal**: business packages usually do not handle 401 — the cli-kit request layer detects a 401 internally and automatically triggers a token refresh (singleflight deduplication), with the refresh capability provided by the auth plugin (see `05-credentials.md`). The two cooperate: the request layer handles "detection + single-flight dedup", while the auth plugin handles "how to exchange the token". Business packages are unaware of this and only call `ctx.get`. The two modes below target **non-auth** business statuses (404/403/5xx, etc.).
 
 ### Mode A: the command checks status itself and throws a typed error
 
@@ -252,7 +252,7 @@ export default defineCli({
 });
 ```
 
-The **value** of `errorOnStatus` **is a subtype string** (not a constructor name). **The subtype implies the category** (see the "Common subtype reference" table above; each subtype belongs to a fixed category), and agent-cli-sdk uses that to automatically pick the matching typed constructor + exit code, so business packages don't hand-write ifs. The built-in mapping for the example above:
+The **value** of `errorOnStatus` **is a subtype string** (not a constructor name). **The subtype implies the category** (see the "Common subtype reference" table above; each subtype belongs to a fixed category), and cli-kit uses that to automatically pick the matching typed constructor + exit code, so business packages don't hand-write ifs. The built-in mapping for the example above:
 
 | status | subtype        | → category    | → constructor                            | → exit |
 | ------ | -------------- | ------------- | ---------------------------------------- | :----: |
@@ -260,7 +260,7 @@ The **value** of `errorOnStatus` **is a subtype string** (not a constructor name
 | `403`  | `forbidden`    | authorization | `PermissionError`                        |   3    |
 | `5xx`  | `server_error` | api           | `APIError`                               |   1    |
 
-> If you configure a subtype that is not registered in the subtype registry, agent-cli-sdk fails validation at startup (and also fails in CI, preventing typos from silently shipping).
+> If you configure a subtype that is not registered in the subtype registry, cli-kit fails validation at startup (and also fails in CI, preventing typos from silently shipping).
 
 HTTP 4xx/5xx throw typed errors by default in 2.0. `errorOnStatus` customizes their categories/subtypes. Explicit per-request `allowHttpErrors: true` bypasses this classification except for final 401. See [production contracts](09-production-contracts.en.md) for defaults, deadlines and cancellation.
 
@@ -361,13 +361,13 @@ if (!loggedIn) throw new errs.BareError(3); // exit 3, no error output rendered 
 
 - **sets only the exit code, renders no stderr error output** — because stdout already carries the answer
 - is the **only** exception on the error side of the output contract (the success-side exception is `skills read`, see `03-envelopes.md`)
-- **forbidden for ordinary business commands**: a normal failure must throw one of the 9 typed error categories so agent-cli-sdk renders unified output
+- **forbidden for ordinary business commands**: a normal failure must throw one of the 9 typed error categories so cli-kit renders unified output
 
 ---
 
 ## Exit code mapping table
 
-agent-cli-sdk sets the exit code automatically from the Category; business packages don't need to worry about it:
+cli-kit sets the exit code automatically from the Category; business packages don't need to worry about it:
 
 | Category                                      | Exit Code |
 | --------------------------------------------- | :-------: |

@@ -129,7 +129,7 @@ pnpm --filter {{package-name}} test
 
 Record only maintenance-critical decisions, such as package/bin/namespace mapping, auth strategy, and error mapping.
 
-For 2.x, describe default HTTP failure, the 30-second timeout, any app `requestTimeoutMs` override and the fact that cancellation does not roll back upstream writes. Verify explicit `allowHttpErrors` and remaining-failure handling in recovery examples. Migration notes should cover imports moving to `/advanced` and `/skills`; do not claim an unreleased version is already installable from npm.
+For 0.0.1, describe default HTTP failure, the 30-second timeout, any app `requestTimeoutMs` override and the fact that cancellation does not roll back upstream writes. Verify explicit `allowHttpErrors` and remaining-failure handling in recovery examples. Migration notes should cover imports moving to `/advanced` and `/skills`; do not claim an unreleased version is already installable from npm.
 
 ## 5. Release checks
 

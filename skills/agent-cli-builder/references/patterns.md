@@ -100,7 +100,7 @@ JSON-argument commands claim native stdin for their JSON document. The runtime s
 The framework already renders arrays as tables and objects as key-value details. Add `humanFormat` only when human-facing output needs custom columns or labels.
 
 ```ts
-import { defineCommand, printTable } from "@renxqoo/agent-cli-sdk";
+import { defineCommand, printTable } from "@myriosx/cli-kit";
 
 list: defineCommand({
   name: "list",

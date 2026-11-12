@@ -23,7 +23,7 @@ contract.
 
 ```ts
 import * as z from "zod";
-import { defineCommand } from "@renxqoo/agent-cli-sdk";
+import { defineCommand } from "@myriosx/cli-kit";
 
 export const health = defineCommand({
   name: "health",

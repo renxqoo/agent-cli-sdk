@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk —— defineCliApp:应用装配器(唯一目录决策点)
+ * @myriosx/cli-kit —— defineCliApp:应用装配器(唯一目录决策点)
  *
  * vite 式装配:`dir` 是顶层配置,能力是插件,装配器把 resolved 本地状态派发给插件。
  * defineCliApp 是推荐入口;defineCli(同步、无 I/O)保留给高级/嵌入式用户。

@@ -85,7 +85,7 @@ defineCli({
 ---
 
 
-2.x 正常路径会等待 `observeRequest`；调用方取消可结束等待，但已启动的审计继续完成，不能当成取消或回滚保证。请求插件应以 `{ ...request }` 保留 `timeout/signal/allowHttpErrors`；调用方 signal 和单次 timeout 由执行器保留。默认 30 秒只覆盖实际 HTTP 及 body，钩子自身的外部 I/O 也应有界。显式组合运行时时从 `/advanced` 导入调度器，不从根入口导入；普通插件只需实现 `Plugin`/`PluginFactory`。
+0.0.1 正常路径会等待 `observeRequest`；调用方取消可结束等待，但已启动的审计继续完成，不能当成取消或回滚保证。请求插件应以 `{ ...request }` 保留 `timeout/signal/allowHttpErrors`；调用方 signal 和单次 timeout 由执行器保留。默认 30 秒只覆盖实际 HTTP 及 body，钩子自身的外部 I/O 也应有界。显式组合运行时时从 `/advanced` 导入调度器，不从根入口导入；普通插件只需实现 `Plugin`/`PluginFactory`。
 
 ## 3. 4 个常见自定义插件
 
@@ -143,7 +143,7 @@ function redactItem(item: Record<string, unknown>) {
 ### 3.4 错误归一化(handleError)
 
 ```ts
-import { errs } from "@renxqoo/agent-cli-sdk";
+import { errs } from "@myriosx/cli-kit";
 
 const errorNormalizePlugin = {
   name: "error-normalize",

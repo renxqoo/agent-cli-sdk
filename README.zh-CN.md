@@ -1,4 +1,4 @@
-# @renxqoo/agent-cli-sdk
+# @myriosx/cli-kit
 
 [English](README.md) · [中文](README.zh-CN.md) · [Website](https://renxqoo.github.io/agent-cli-sdk)
 
@@ -8,13 +8,13 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D26-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml)
 
-**2.0 迁移**：HTTP 错误默认抛出，请求默认超时 30 秒；运行时组合 API 使用 `/advanced`，Skill 工具使用 `/skills`。见[生产契约与迁移](docs/09-production-contracts.md)。
+**0.0.1 迁移**：HTTP 错误默认抛出，请求默认超时 30 秒；运行时组合 API 使用 `/advanced`，Skill 工具使用 `/skills`。见[生产契约与迁移](docs/09-production-contracts.md)。
 
 ---
 
 ## 这是什么
 
-`agent-cli-sdk` 让你用**一份声明**把公司 API 同时暴露给人和 AI agent。它是一个 SDK(你用它构建 CLI),也是一个 **skill 工厂**:包自带 [`agent-cli-builder`](skills/agent-cli-builder/SKILL.md) skill,所以 AI agent 能根据 API 描述帮你生成整份 CLI。
+`cli-kit` 让你用**一份声明**把公司 API 同时暴露给人和 AI agent。它是一个 SDK(你用它构建 CLI),也是一个 **skill 工厂**:包自带 [`agent-cli-builder`](skills/agent-cli-builder/SKILL.md) skill,所以 AI agent 能根据 API 描述帮你生成整份 CLI。
 
 一个 `defineCommand` 产出三份同步的产物:
 
@@ -36,7 +36,7 @@ defineCommand(name / description / zod / run)
 
 ```bash
 # 1. 把 SDK 加进一个新的业务包
-npm install @renxqoo/agent-cli-sdk
+npm install @myriosx/cli-kit
 ```
 
 ```text
@@ -67,9 +67,9 @@ acme skills sync              # ~/.agents + 探测到的 ~/.claude/.codex/.curso
 要求 **Node.js >= 26 / Bun >= 1.4**。本包是 ESM-only(`import` / 动态 `import()`;不支持 CommonJS `require()`)。
 
 ```bash
-npm install @renxqoo/agent-cli-sdk
+npm install @myriosx/cli-kit
 # 或
-pnpm add @renxqoo/agent-cli-sdk
+pnpm add @myriosx/cli-kit
 ```
 
 ---
@@ -80,7 +80,7 @@ pnpm add @renxqoo/agent-cli-sdk
 
 ```ts
 #!/usr/bin/env node
-import { defineCli, defineCommand } from "@renxqoo/agent-cli-sdk";
+import { defineCli, defineCommand } from "@myriosx/cli-kit";
 import * as z from "zod";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -122,7 +122,7 @@ export default app;
 加 OAuth 只要一行:
 
 ```ts
-import { defineCliApp, defineAuth } from "@renxqoo/agent-cli-sdk";
+import { defineCliApp, defineAuth } from "@myriosx/cli-kit";
 import { homedir } from "node:os";
 import { join } from "node:path";
 

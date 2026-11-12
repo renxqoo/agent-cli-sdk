@@ -1,4 +1,4 @@
-# @renxqoo/agent-cli-sdk
+# @myriosx/cli-kit
 
 [English](README.md) · [中文](README.zh-CN.md) · [Website](https://renxqoo.github.io/agent-cli-sdk)
 
@@ -8,13 +8,13 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D26-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml)
 
-**2.0 migration:** HTTP errors throw by default and requests have a 30-second default timeout. Runtime composition APIs use `/advanced`; Skill utilities use `/skills`. See [production contracts and migration](docs/09-production-contracts.en.md).
+**0.0.1 migration:** HTTP errors throw by default and requests have a 30-second default timeout. Runtime composition APIs use `/advanced`; Skill utilities use `/skills`. See [production contracts and migration](docs/09-production-contracts.en.md).
 
 ---
 
 ## What it is
 
-`agent-cli-sdk` lets you expose a company API to humans _and_ AI agents from a single declaration. It is an SDK (you build a CLI with it), and it is a **skill factory**: the package ships an [`agent-cli-builder`](skills/agent-cli-builder/SKILL.md) skill, so an AI agent can generate the whole CLI for you from an API description.
+`cli-kit` lets you expose a company API to humans _and_ AI agents from a single declaration. It is an SDK (you build a CLI with it), and it is a **skill factory**: the package ships an [`agent-cli-builder`](skills/agent-cli-builder/SKILL.md) skill, so an AI agent can generate the whole CLI for you from an API description.
 
 One `defineCommand` produces three synchronized artifacts:
 
@@ -36,7 +36,7 @@ The fastest path — you don't even write the code:
 
 ```bash
 # 1. Add the SDK to a new business package
-npm install @renxqoo/agent-cli-sdk
+npm install @myriosx/cli-kit
 ```
 
 ```text
@@ -67,9 +67,9 @@ Done. Teammates run `acme orders list`; their agents discover `acme` from the sk
 Requires **Node.js >= 26 / Bun >= 1.4**. This package is ESM-only (`import` / dynamic `import()`; CommonJS `require()` is not supported).
 
 ```bash
-npm install @renxqoo/agent-cli-sdk
+npm install @myriosx/cli-kit
 # or
-pnpm add @renxqoo/agent-cli-sdk
+pnpm add @myriosx/cli-kit
 ```
 
 ---
@@ -80,7 +80,7 @@ A complete single-command CLI in under 30 lines (no-auth, public data):
 
 ```ts
 #!/usr/bin/env node
-import { defineCli, defineCommand } from "@renxqoo/agent-cli-sdk";
+import { defineCli, defineCommand } from "@myriosx/cli-kit";
 import * as z from "zod";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -122,7 +122,7 @@ export default app;
 Add OAuth in one line:
 
 ```ts
-import { defineCliApp, defineAuth } from "@renxqoo/agent-cli-sdk";
+import { defineCliApp, defineAuth } from "@myriosx/cli-kit";
 import { homedir } from "node:os";
 import { join } from "node:path";
 

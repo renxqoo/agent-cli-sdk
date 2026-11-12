@@ -298,7 +298,7 @@ describe("H5: --version", () => {
     // 不应是 help 全文(不应含 "Usage:" / "Commands:")
     expect(stdoutBuf).not.toContain("Usage:");
     expect(stdoutBuf).not.toContain("Commands:");
-    // 应包含版本号(agent-cli-sdk 包版本 0.1.0)
+    // 应包含版本号
     expect(stdoutBuf).toMatch(/\d+\.\d+\.\d+/);
   });
 

@@ -1,15 +1,15 @@
 # 00 · Architecture overview
 
-> Current 2.0 public behavior and API boundaries: [production contracts](09-production-contracts.en.md).
+> Current 0.0.1 public behavior and API boundaries: [production contracts](09-production-contracts.en.md).
 
 
-> This document is the design anchor for agent-cli-sdk. Every follow-up document (command usage, SDK guide, unified output format, errors, credentials, skills) defers to the global decisions here; the implementation must not deviate.
+> This document is the design anchor for cli-kit. Every follow-up document (command usage, SDK guide, unified output format, errors, credentials, skills) defers to the global decisions here; the implementation must not deviate.
 
 ---
 
 ## One-line positioning
 
-**`@renxqoo/agent-cli-sdk` is an agent-native CLI framework package: a business package depends on it and only declares "which backend endpoint to call and how to shape the fields", and in return gets the full set of capabilities — auth, redaction, unified output format, error classification, pipe composition, skill discovery, and more.**
+**`@myriosx/cli-kit` is an agent-native CLI framework package: a business package depends on it and only declares "which backend endpoint to call and how to shape the fields", and in return gets the full set of capabilities — auth, redaction, unified output format, error classification, pipe composition, skill discovery, and more.**
 
 The core tension it resolves is: **backend interfaces differ wildly (REST/GraphQL/RPC, OAuth/API-key/mTLS, every field-naming convention), but "how you hand data to an agent" is universal.** The framework leaves the former to the business package and converges the latter into framework capabilities.
 
@@ -19,8 +19,8 @@ The core tension it resolves is: **backend interfaces differ wildly (REST/GraphQ
 
 | Dimension        | Approach                                                                 |
 | ---------------- | ------------------------------------------------------------------------ |
-| Form             | **SDK framework**: agent-cli-sdk (this repo) + a standalone business npm |
-| Business package | Someone writes a standalone npm package that depends on agent-cli-sdk    |
+| Form             | **SDK framework**: cli-kit (this repo) + a standalone business npm |
+| Business package | Someone writes a standalone npm package that depends on cli-kit    |
 | Coding style     | **function style + config-object declaration** (defineCli/defineCommand) |
 | Output           | **Unified output format** (success on stdout / error on stderr)          |
 | Errors           | **9 typed error classes + exit-code mapping + structured output**        |
@@ -48,7 +48,7 @@ The core tension it resolves is: **backend interfaces differ wildly (REST/GraphQ
 │  — write SKILL.md (semantic part; command table auto-generated)  │
 │  — all business knowledge lives here; the SDK knows no business  │
 ├──────────────────────────────────────────────────────────────────┤
-│  @renxqoo/agent-cli-sdk (base package, maintained in this repo)  │
+│  @myriosx/cli-kit (base package, maintained in this repo)  │
 │  — ctx request methods (get/post/... with auth + 401 auto-refresh)│
 │  — unified output format: the unified success/error contract                   │
 │  — error classification: 9 classes + exit codes + typed ctor      │
@@ -81,7 +81,7 @@ The design borrows from two industrial-grade CLIs, each for a different aspect:
 ## Repository structure
 
 ```
- agent-cli-sdk/
+ cli-kit/
 ├── src/                         implementation (types/define/oauth/credentials/skills/qrcode/...)
 ├── docs/                        ★ design docs (this directory, shipped with the package)
 ├── skills/agent-cli-builder/    bundled skill: teaches an agent to build a CLI with this SDK
@@ -94,7 +94,7 @@ The design borrows from two industrial-grade CLIs, each for a different aspect:
 
 **Business-package integration (standalone npm):**
 
-A business package is a **standalone npm package** that depends on `@renxqoo/agent-cli-sdk`; see `02-sdk-guide.md` for how it is loaded.
+A business package is a **standalone npm package** that depends on `@myriosx/cli-kit`; see `02-sdk-guide.md` for how it is loaded.
 
 ---
 
@@ -104,7 +104,7 @@ This is the decision table finalized after the project discussion. **All subsequ
 
 | #   | Dimension         | Decision                                                                                                                                        | See doc             |
 | --- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| 1   | Architecture      | agent-cli-sdk standalone repo (SDK) + business package standalone npm                                                                           | this doc            |
+| 1   | Architecture      | cli-kit standalone repo (SDK) + business package standalone npm                                                                           | this doc            |
 | 2   | Loading           | standalone bin as primary + loadable as a subcommand by the rxcli main package                                                                  | `02-sdk-guide.md`   |
 | 3   | Coding style      | **function style + config-object declaration** (no class inheritance)                                                                           | `02-sdk-guide.md`   |
 | 4   | Requests          | **drop the client concept** (no createClient/Client); request methods `get/post/...` all live on `ctx`; auth belongs to SDK internals + auth plugins | `02-sdk-guide.md`   |

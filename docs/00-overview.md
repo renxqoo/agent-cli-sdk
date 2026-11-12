@@ -1,15 +1,15 @@
 # 00 · 架构总览
 
-> 当前 2.0 公开行为与 API 边界见[生产契约](09-production-contracts.md)。
+> 当前 0.0.1 公开行为与 API 边界见[生产契约](09-production-contracts.md)。
 
 
-> 本文档是 agent-cli-sdk 的设计锚点。所有后续文档(命令使用、SDK 指南、统一输出格式、错误、凭证、skill)都以本文档的全局决策为准,实现不允许偏离。
+> 本文档是 cli-kit 的设计锚点。所有后续文档(命令使用、SDK 指南、统一输出格式、错误、凭证、skill)都以本文档的全局决策为准,实现不允许偏离。
 
 ---
 
 ## 一句话定位
 
-**`@renxqoo/agent-cli-sdk` 是一个 agent-native CLI 框架包:业务包依赖它,只用声明"调哪个后端接口、字段怎么处理",就能获得鉴权、脱敏、统一输出格式、错误分类、管道组合、skill 发现等全套能力。**
+**`@myriosx/cli-kit` 是一个 agent-native CLI 框架包:业务包依赖它,只用声明"调哪个后端接口、字段怎么处理",就能获得鉴权、脱敏、统一输出格式、错误分类、管道组合、skill 发现等全套能力。**
 
 它解决的核心矛盾是:**后端接口千差万别(REST/GraphQL/RPC、OAuth/API-key/mTLS、各种字段命名),但"把数据交给 agent 的方式"是通用的。** 框架把前者交给业务包,后者收敛成框架能力。
 
@@ -19,8 +19,8 @@
 
 | 维度       | 做法                                                         |
 | ---------- | ------------------------------------------------------------ |
-| 形态       | **SDK 框架**:agent-cli-sdk(本仓库)+ 业务包独立 npm |
-| 业务包接入 | 别人写独立 npm 包,依赖 agent-cli-sdk                          |
+| 形态       | **SDK 框架**:cli-kit(本仓库)+ 业务包独立 npm |
+| 业务包接入 | 别人写独立 npm 包,依赖 cli-kit                          |
 | 编程风格   | **function 风格 + 配置对象声明**(defineCli/defineCommand)    |
 | 输出       | **统一统一输出格式**(成功 stdout / 错误 stderr)              |
 | 错误       | **9 类类型化错误 + exit code 映射 + 结构化统一输出格式**     |
@@ -45,9 +45,9 @@
 │  ─ 用 ctx.get/post 请求(无 client 层)                       │
 │  ─ 写插件(标准认证用 defineAuth,特殊协议组合基础块)          │
 │  ─ 写 SKILL.md(语义部分,命令表自动生成)                     │
-│  ─ 业务知识全在这层,agent-cli-sdk 不懂业务                          │
+│  ─ 业务知识全在这层,cli-kit 不懂业务                          │
 ├──────────────────────────────────────────────────────────────┤
-│  @renxqoo/agent-cli-sdk(基础包,本仓维护)                          │
+│  @myriosx/cli-kit(基础包,本仓维护)                          │
 │  ─ ctx 请求方法(get/post/...,带鉴权 + 401 自动续期)         │
 │  ─ 统一输出格式:成功/失败的统一输出契约                                │
 │  ─ 错误分类:9 类 + exit code + 类型化构造器                   │
@@ -59,7 +59,7 @@
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**关键边界:agent-cli-sdk 不懂业务,业务包不懂框架细节。** 两者的契约面是 `ctx`(命令运行时上下文)和"统一输出格式"。
+**关键边界:cli-kit 不懂业务,业务包不懂框架细节。** 两者的契约面是 `ctx`(命令运行时上下文)和"统一输出格式"。
 
 ---
 
@@ -80,7 +80,7 @@
 ## 仓库结构
 
 ```
- agent-cli-sdk/
+ cli-kit/
 ├── src/                        实现代码(types/define/oauth/credentials/skills/qrcode/...)
 ├── docs/                       ★ 设计文档(本目录,随包发布)
 ├── skills/agent-cli-builder/   内置 skill:教 agent 用本 SDK 构建 CLI
@@ -93,7 +93,7 @@
 
 **业务包接入(独立 npm):**
 
-业务包是**独立 npm 包**,依赖 `@renxqoo/agent-cli-sdk`;装载方式见 `02-sdk-guide.md`。
+业务包是**独立 npm 包**,依赖 `@myriosx/cli-kit`;装载方式见 `02-sdk-guide.md`。
 
 ---
 
@@ -103,10 +103,10 @@
 
 | #   | 维度         | 决策                                                                                                                                                            | 详见文档            |
 | --- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| 1   | 架构         | agent-cli-sdk 独立仓库(SDK)+ 业务包独立 npm                                                                                                                   | 本文档              |
+| 1   | 架构         | cli-kit 独立仓库(SDK)+ 业务包独立 npm                                                                                                                   | 本文档              |
 | 2   | 装载         | 独立 bin 为主 + 可被 rxcli 主包装载为子命令                                                                                                                     | `02-sdk-guide.md`   |
 | 3   | 编程风格     | **function 风格 + 配置对象声明**(不用 class 继承)                                                                                                               | `02-sdk-guide.md`   |
-| 4   | 请求         | **取消 client 概念**(无 createClient/Client);请求方法 `get/post/...` 全挂 `ctx`;鉴权归 agent-cli-sdk 内部 + auth 插件                                                 | `02-sdk-guide.md`   |
+| 4   | 请求         | **取消 client 概念**(无 createClient/Client);请求方法 `get/post/...` 全挂 `ctx`;鉴权归 cli-kit 内部 + auth 插件                                                 | `02-sdk-guide.md`   |
 | 5   | transport    | 低层 `ctx.request` + 高层便利方法(`ctx.get` 等);**REST 先行**                                                                                                   | `02-sdk-guide.md`   |
 | 6   | 横切机制     | **vite 式插件**(钩子是 Plugin 接口,defineCli 用 `plugins: []`,不做内联钩子)                                                                                     | `02-sdk-guide.md`   |
 | 7   | 错误         | 类型化错误 + 结构化统一输出格式到 stderr + **9 类 exit code**;throw 进 observeError/handleError 链                                                              | `04-errors.md`      |
@@ -133,7 +133,7 @@
 - **ctx.state 强类型**:`defineCli<State>` 声明才能访问,未声明报错。从结构上消灭"乱塞"——不是开放 bag,是强类型共享渠道(插件间传递数据)。
 - **enforce 三档**:解决"加 header 的先跑、签名最后跑"的顺序问题(pre 加基础参数 → normal 业务 → post 签名收尾)。
 - **agent 自决续拉分页**:不假设"必须拉全量",给 agent `complete:false + nextToken`,让它按场景决定续不续。
-- **本地过滤交 jq**:agent-cli-sdk 不重复造 jq。stdout 是结构化 JSON,右边的过滤/选字段/排序全用 unix 工具链。
+- **本地过滤交 jq**:cli-kit 不重复造 jq。stdout 是结构化 JSON,右边的过滤/选字段/排序全用 unix 工具链。
 - **stdout/stderr 铁律**:管道能组合的根是 stdout 纯净。日志/进度/错误提示全 stderr,否则 `rxcli a | jq` 混进一行"加载中"整个管道就废了。
 
 ---

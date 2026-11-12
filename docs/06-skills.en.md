@@ -17,7 +17,7 @@
 
 ## skill reader: list / read / sync
 
-agent-cli-sdk provides a skill content reader (reusing the previous version's design, aligned with lark-cli's `skillcontent/reader.go`, with path-traversal validation). Agents use these commands for self-service discovery of capabilities:
+cli-kit provides a skill content reader (reusing the previous version's design, aligned with lark-cli's `skillcontent/reader.go`, with path-traversal validation). Agents use these commands for self-service discovery of capabilities:
 
 ### `skills list` — list all skills
 
@@ -301,7 +301,7 @@ rxcli skills sync
 The framework ships 7 default targets (see the `DEFAULT_SKILL_TARGETS` table above), which use detection by default. A business package can completely override them:
 
 ```ts
-import { defineCli } from "@renxqoo/agent-cli-sdk";
+import { defineCli } from "@myriosx/cli-kit";
 
 defineCli({
   // …

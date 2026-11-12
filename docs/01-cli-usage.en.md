@@ -9,7 +9,7 @@
 A business package is a standalone npm package, installed on demand:
 
 ```bash
-# install one business package (it pulls in agent-cli-sdk automatically)
+# install one business package (it pulls in cli-kit automatically)
 npm i -g @org/rxcli-orders
 
 # install several
@@ -67,7 +67,7 @@ o_1002   ¥89     shipped
 
 ## Local filtering, field selection, sorting — all to jq
 
-agent-cli-sdk **does not provide** local filtering flags like `--filter` / `--fields` / `--sort`. The reason: `jq` / `sort` / `uniq` already do this well, and agents don't need to learn a new syntax.
+cli-kit **does not provide** local filtering flags like `--filter` / `--fields` / `--sort`. The reason: `jq` / `sort` / `uniq` already do this well, and agents don't need to learn a new syntax.
 
 ```bash
 # filter rows: jq select
@@ -88,11 +88,11 @@ rxcli-orders list \
 
 **The principle: on the left, `rxcli` only produces data (passes the backend through + unified output format); on the right, all filtering/extraction/sorting is unix tools.** This is unix pipe philosophy, and the composition style agents know best.
 
-> Which flags does agent-cli-sdk own, and what goes to jq? The criterion is decision items #12 and #13 in `00-overview.md`.
+> Which flags does cli-kit own, and what goes to jq? The criterion is decision items #12 and #13 in `00-overview.md`.
 >
-> - **server params** (affect the backend query): `--limit`/`--offset`/`--status` etc. → agent-cli-sdk owns them, because you can't reach the backend locally
+> - **server params** (affect the backend query): `--limit`/`--offset`/`--status` etc. → cli-kit owns them, because you can't reach the backend locally
 > - **local data ops** (change stdout content): filtering/field selection/sorting → to jq
-> - **output format** (unified serialization): JSON/table → agent-cli-sdk owns it, because it is bound to the output contract
+> - **output format** (unified serialization): JSON/table → cli-kit owns it, because it is bound to the output contract
 
 ---
 
@@ -147,8 +147,8 @@ Pipes compose reliably because **stdout stays clean**:
 
 | Stream     | Content                                                                      | Written by                                  |
 | ---------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
-| **stdout** | **only** unified JSON (success `{ok,data,meta}`; an empty array is still valid JSON) | agent-cli-sdk serializing the `run` return value |
-| **stderr** | logs, progress, hints, warnings, error output                                | agent-cli-sdk's `ctx.log` + error rendering |
+| **stdout** | **only** unified JSON (success `{ok,data,meta}`; an empty array is still valid JSON) | cli-kit serializing the `run` return value |
+| **stderr** | logs, progress, hints, warnings, error output                                | cli-kit's `ctx.log` + error rendering |
 
 **Iron rule: a business command must never write non-unified-format content directly to stdout.** Everything non-data goes through `ctx.log` (stderr). Otherwise `rxcli-orders list | jq` would mix in a "loading..." line and the whole pipe is ruined.
 
@@ -158,7 +158,7 @@ See "stdout/stderr allocation rules" in `03-envelopes.md`.
 
 ## Pagination: the agent decides whether to continue
 
-Backend data can be large, so agent-cli-sdk fetches one page by default, but tells you **completeness** and the **continuation cursor** in the `meta` of the unified output format:
+Backend data can be large, so cli-kit fetches one page by default, but tells you **completeness** and the **continuation cursor** in the `meta` of the unified output format:
 
 ```bash
 $ rxcli-orders list --limit 30
@@ -184,9 +184,9 @@ $ rxcli-orders list --limit 30
 rxcli-orders list --limit 30 --page-token abc123
 ```
 
-**Why not auto-fetch everything?** Because some queries should not auto-pull 10,000 rows (slow, eats context). agent-cli-sdk gives the agent enough information (`complete` + `next_token`) to decide per scenario whether to continue — more realistic than "force stream everything".
+**Why not auto-fetch everything?** Because some queries should not auto-pull 10,000 rows (slow, eats context). cli-kit gives the agent enough information (`complete` + `next_token`) to decide per scenario whether to continue — more realistic than "force stream everything".
 
-> How does a business command implement the pagination protocol (telling agent-cli-sdk how to page)? See "Pagination implementation" in `02-sdk-guide.md`.
+> How does a business command implement the pagination protocol (telling cli-kit how to page)? See "Pagination implementation" in `02-sdk-guide.md`.
 
 ---
 

@@ -114,7 +114,7 @@ defineCli({
 | 429    | `rate_limited`   | api(自动 retryable:true) |   1    |
 | 5xx    | `server_error`   | api(自动 retryable:true) |   1    |
 
-`errorOnStatus` 的值**只写 subtype 字符串**,不写构造器名。agent-cli-sdk 自动从 subtype 注册表查 Category 选构造器。
+`errorOnStatus` 的值**只写 subtype 字符串**,不写构造器名。cli-kit 自动从 subtype 注册表查 Category 选构造器。
 
 401 是请求层保留状态：框架会尝试一次 auth refresh/retry，最终仍为 401 时保持认证类别（通常为 `no_token`，刷新被拒时可为 `token_expired`）；非认证映射不能改变其类别。
 
@@ -148,14 +148,14 @@ get: defineCommand({
 }),
 ```
 
-2.0 默认对全部 HTTP 4xx/5xx 抛错；`errorOnStatus` 覆盖默认分类。上例显式允许检查响应后，还必须处理其他错误状态，才能返回成功。最终 401 始终保留认证失败语义。取消为 `network/cancelled` 且不可重试，超时为 `network/timeout`。
+0.0.1 默认对全部 HTTP 4xx/5xx 抛错；`errorOnStatus` 覆盖默认分类。上例显式允许检查响应后，还必须处理其他错误状态，才能返回成功。最终 401 始终保留认证失败语义。取消为 `network/cancelled` 且不可重试，超时为 `network/timeout`。
 
 ---
 
 ## 4. 完整错误抛出示例
 
 ```ts
-import { errs } from "@renxqoo/agent-cli-sdk";
+import { errs } from "@myriosx/cli-kit";
 
 // ① 参数错误
 throw new errs.ValidationError({
@@ -231,12 +231,12 @@ defineCli({
 
 ```ts
 // 业务包入口登记自己的 subtype 到 SUBTYPE_REGISTRY
-import { SUBTYPE_REGISTRY } from "@renxqoo/agent-cli-sdk";
+import { SUBTYPE_REGISTRY } from "@myriosx/cli-kit";
 
 SUBTYPE_REGISTRY["my_custom_subtype"] = { category: "api" };
 ```
 
-> 直接修改全局注册表是反模式。**优先复用标准 subtype**;确需自定义时再用上述方式登记(后续 agent-cli-sdk 会提供声明式方式)。
+> 直接修改全局注册表是反模式。**优先复用标准 subtype**;确需自定义时再用上述方式登记(后续 cli-kit 会提供声明式方式)。
 
 ---
 

@@ -28,7 +28,7 @@
 `createTestCtx` 在低层 mock `request`，因此 `get/post/...` 都会走同一个替身：
 
 ```ts
-import { createTestCtx } from "@renxqoo/agent-cli-sdk";
+import { createTestCtx } from "@myriosx/cli-kit";
 
 it("把 limit 传给后端并返回列表", async () => {
   let request: { path?: string; query?: Record<string, unknown> } = {};

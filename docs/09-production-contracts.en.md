@@ -1,6 +1,6 @@
-# 2.0 Production Contracts and Migration
+# 0.0.1 Production Contracts and Migration
 
-This document defines the 2.0.0 public contract. See [the earlier runtime migration](08-runtime-refactor.md) for session and file-format history.
+This document defines the 0.0.1 public contract. See [the earlier runtime migration](08-runtime-refactor.md) for session and file-format history.
 
 ## Scope and API boundaries
 
@@ -8,11 +8,11 @@ The baseline is `e82b30d`. Preserve command declarations, validated input, outpu
 
 | Entry point | Responsibility |
 | --- | --- |
-| `@renxqoo/agent-cli-sdk` | Application/command/auth factories, plugin and context types, errors, output and test helpers |
-| `@renxqoo/agent-cli-sdk/advanced` | Plugin setup/dispatch, context and HTTP adapter factories, command execution and pipe readers |
-| `@renxqoo/agent-cli-sdk/credentials` | Credential providers and ConfigStore |
-| `@renxqoo/agent-cli-sdk/skills` | Skill discovery, generation, publication and formatting utilities |
-| `@renxqoo/agent-cli-sdk/errs` | Error types, classification and exit codes |
+| `@myriosx/cli-kit` | Application/command/auth factories, plugin and context types, errors, output and test helpers |
+| `@myriosx/cli-kit/advanced` | Plugin setup/dispatch, context and HTTP adapter factories, command execution and pipe readers |
+| `@myriosx/cli-kit/credentials` | Credential providers and ConfigStore |
+| `@myriosx/cli-kit/skills` | Skill discovery, generation, publication and formatting utilities |
+| `@myriosx/cli-kit/errs` | Error types, classification and exit codes |
 
 All listed entry points follow SemVer. Advanced callers own lifecycle ordering and process I/O; advanced does not mean unstable. Files outside `package.json.exports` are private. Public removals, changed default failure semantics and raised runtime minimums require a major release with migration instructions.
 
@@ -32,8 +32,8 @@ The SDK targets standalone Node.js 26+ / Bun 1.4+ CLIs. App.run uses process str
 - Per-attempt deadlines do not cover arbitrary plugin work or shared OAuth refresh. OAuthClient retains its own 30-second protocol timeout. Hooks must terminate; callers needing a deadline across the whole operation can pass AbortSignal.timeout(...).
 
 ```ts
-import { setupPlugins, throwForResponse } from "@renxqoo/agent-cli-sdk/advanced";
-import { generateAutogenBlock } from "@renxqoo/agent-cli-sdk/skills";
+import { setupPlugins, throwForResponse } from "@myriosx/cli-kit/advanced";
+import { generateAutogenBlock } from "@myriosx/cli-kit/skills";
 
 // defineCli({ ..., requestTimeoutMs: 15_000 }) sets the application default.
 const response = await ctx.get("/orders", { limit: 20 }, {
@@ -55,7 +55,7 @@ The request behavior matrix is covered by production-request and request-network
 
 pnpm release:check --base <git-ref> requires valid increasing SemVer when the version changes and exactly one matching, validly dated changelog heading. The default base is HEAD; missing Git bases fail closed. CI compares PR base SHA or main push before SHA. The gate checks metadata, not every possible source compatibility break.
 
-Build, typecheck, lint, format, documentation links, Node/Bun tests, coverage and tarball installation are required. Packaged consumers check all five entry points, emitted declarations and failure/cancellation exit codes. Local macOS results and cross-platform CI configuration must be reported separately. Tests do not establish long-term production adoption. Publishing remains an explicit action; this change prepares 2.0.0 without publishing.
+Build, typecheck, lint, format, documentation links, Node/Bun tests, coverage and tarball installation are required. Packaged consumers check all five entry points, emitted declarations and failure/cancellation exit codes. Local macOS results and cross-platform CI configuration must be reported separately. Tests do not establish long-term production adoption. Publishing remains an explicit action; this change prepares 0.0.1 without publishing.
 
 ## Local acceptance record (2026-11-12)
 

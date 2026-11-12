@@ -11,6 +11,26 @@ describe("release metadata gate", () => {
     expect(() => validateRelease(current, previous, entry)).not.toThrow();
     expect(() => validateRelease(current, current, entry)).not.toThrow();
   });
+  it("accepts a renamed package starting at 0.0.1 and subsequent unchanged releases", () => {
+    const initial = { name: "@myriosx/cli-kit", version: "0.0.1" };
+    const initialEntry = "## [@myriosx/cli-kit@0.0.1] - 2026-11-12\n";
+    expect(() => validateRelease(initial, current, initialEntry)).not.toThrow();
+    expect(() => validateRelease(initial, initial, initialEntry)).not.toThrow();
+    expect(() => validateRelease(initial, current, entry)).toThrow("exactly one changelog heading");
+  });
+  it.each(["0.0.0", "0.0.1-rc.1", "0.0.1+build.1", "1.0.0", "3.0.0"])(
+    "rejects package renames without an initial 0.0.1 release: %s",
+    (version) => {
+      expect(() => validateRelease({ name: "@test/renamed-sdk", version }, current, entry)).toThrow(
+        "Package renames must start at version 0.0.1",
+      );
+    },
+  );
+  it("rejects resetting an existing package to 0.0.1", () => {
+    expect(() => validateRelease({ ...current, version: "0.0.1" }, current, entry)).toThrow(
+      "Package version must increase",
+    );
+  });
   it.each(["", "## [@test/sdk@1.0.1] - 2026-11-12", entry + entry])(
     "rejects missing, stale or duplicate release entries",
     (text) => {

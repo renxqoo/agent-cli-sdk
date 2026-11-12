@@ -1,9 +1,9 @@
 # 02 · SDK Development Guide
 
-> 2.0 HTTP defaults, API entry points and migration: [production contracts](09-production-contracts.en.md).
+> 0.0.1 HTTP defaults, API entry points and migration: [production contracts](09-production-contracts.en.md).
 
 
-> For **business-package developers**. Explains how to use `@renxqoo/agent-cli-sdk` to write a business package: directory structure, ctx, commands, plugins, auth, pagination, testing. This is the document developers reach for most often.
+> For **business-package developers**. Explains how to use `@myriosx/cli-kit` to write a business package: directory structure, ctx, commands, plugins, auth, pagination, testing. This is the document developers reach for most often.
 
 ---
 
@@ -14,7 +14,7 @@
 ```bash
 mkdir rxcli-orders && cd rxcli-orders
 pnpm init
-pnpm add @renxqoo/agent-cli-sdk
+pnpm add @myriosx/cli-kit
 ```
 
 ### 2. Directory structure
@@ -33,7 +33,7 @@ rxcli-orders/
         └── SKILL.md      ← teaches the agent how to use it (command table auto-generated)
 ```
 
-> Note: there is no `client.ts`. agent-cli-sdk removes the client concept; request methods hang directly on `ctx`. For standard OAuth, Bearer, API key, and Basic auth, prefer `defineAuth`; only special protocols like HMAC and mTLS require a hand-written Plugin.
+> Note: there is no `client.ts`. cli-kit removes the client concept; request methods hang directly on `ctx`. For standard OAuth, Bearer, API key, and Basic auth, prefer `defineAuth`; only special protocols like HMAC and mTLS require a hand-written Plugin.
 
 ### 3. package.json
 
@@ -49,17 +49,17 @@ rxcli-orders/
     "build": "tsc",
     "test": "vitest",
   },
-  "dependencies": { "@renxqoo/agent-cli-sdk": "^1.2.0" },
+  "dependencies": { "@myriosx/cli-kit": "^0.0.1" },
 }
 ```
 
-`@renxqoo/agent-cli-sdk` ships ESM only. Business packages must use `"type": "module"` and ESM `import`; CommonJS `require()` is not supported.
+`@myriosx/cli-kit` ships ESM only. Business packages must use `"type": "module"` and ESM `import`; CommonJS `require()` is not supported.
 
 ### 4. Entry point src/index.ts
 
 ```ts
 #!/usr/bin/env node
-import { defineCliApp, defineAuth } from "@renxqoo/agent-cli-sdk";
+import { defineCliApp, defineAuth } from "@myriosx/cli-kit";
 import { ordersCommands } from "./commands/orders.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -92,7 +92,7 @@ export default await defineCliApp<OrdersState>({
 
 ## Programming style: function, not class
 
-agent-cli-sdk uses a **function style + config-object declaration** (decision list #3). Reasons:
+cli-kit uses a **function style + config-object declaration** (decision list #3). Reasons:
 
 - **Composition > inheritance**: framework scenarios need composition (pipelines), tree-shaking (publishing to npm), and testability (mock arguments). Class inheritance is inferior to functions on all three fronts.
 - **Dependency injection rather than implicit this**: the command `run(ctx, args)` obtains framework-injected capabilities (`ctx.get`, `ctx.log`, etc.) through `ctx`, instead of relying on the implicit `this` of a class inheritance chain. The agent reads the code without ambiguity.
@@ -134,7 +134,7 @@ async run(ctx, args) {
 
 ## TS typing conventions (pin constraints with types)
 
-agent-cli-sdk uses the TS type system to enforce structural constraints. The table below distinguishes "what TS can pin down" from "what TS can't and needs a runtime check":
+cli-kit uses the TS type system to enforce structural constraints. The table below distinguishes "what TS can pin down" from "what TS can't and needs a runtime check":
 
 | Constraint                                          | How it's pinned                                              | TS or runtime                    |
 | --------------------------------------------------- | ------------------------------------------------------------ | -------------------------------- |
@@ -257,7 +257,7 @@ Componentized command groups use `defineCommands<State>({...})` to obtain the co
 
 ## ctx: requests and context
 
-`ctx` is the context agent-cli-sdk injects into every `run(ctx, args)`. **Request methods hang directly on ctx (no client layer); auth is handled by the auth plugin + agent-cli-sdk internals, invisible to the business package.**
+`ctx` is the context cli-kit injects into every `run(ctx, args)`. **Request methods hang directly on ctx (no client layer); auth is handled by the auth plugin + cli-kit internals, invisible to the business package.**
 
 ```ts
 interface CommandContext<State = {}> {
@@ -328,12 +328,12 @@ res.data; // unknown
 
 **The generic is purely an enhancement, not required.**
 
-### Auth: handled by the auth plugin + the agent-cli-sdk request layer
+### Auth: handled by the auth plugin + the cli-kit request layer
 
 The business package **does not touch** auth details (token/refresh/header injection). These are handled automatically by two parts:
 
-1. **auth plugin** (written by the business package, assembled from agent-cli-sdk building blocks): beforeCommand fills `ctx.state.user` and caches the token; beforeRequest injects the token header
-2. **agent-cli-sdk request layer**: automatic refresh on 401 (singleflight) — provided the auth plugin implements the public `handleUnauthorized` hook
+1. **auth plugin** (written by the business package, assembled from cli-kit building blocks): beforeCommand fills `ctx.state.user` and caches the token; beforeRequest injects the token header
+2. **cli-kit request layer**: automatic refresh on 401 (singleflight) — provided the auth plugin implements the public `handleUnauthorized` hook
 
 The business package just issues requests with `ctx.get(...)`; the token/header is attached automatically. See `05-credentials.md` for details.
 
@@ -401,7 +401,7 @@ Every command is declared with `defineCommand`. Commands can be defined individu
 ### A single command (with the three generics)
 
 ```ts
-import { defineCommand, errs } from "@renxqoo/agent-cli-sdk";
+import { defineCommand, errs } from "@myriosx/cli-kit";
 import * as z from "zod";
 interface Order {
   id: string;
@@ -429,7 +429,7 @@ export const getOrder = defineCommand({
 
 ```ts
 // src/commands/orders.ts
-import { defineCommands, defineCommand, errs } from "@renxqoo/agent-cli-sdk";
+import { defineCommands, defineCommand, errs } from "@myriosx/cli-kit";
 import * as z from "zod";
 interface OrderListResult {
   items: Order[];
@@ -674,7 +674,7 @@ defineCli({ plugins: [tenantPlugin('acme')], ... })
 
 `defineAuth` is the standard auth factory, and what it returns is still an ordinary `Plugin`. Use it directly for OAuth, Bearer, API key, and Basic scenarios; only HMAC, mTLS, or composite auth require hand-writing `beforeCommand`, `beforeRequest`, and `handleUnauthorized` from the building blocks below.
 
-Building blocks provided by agent-cli-sdk (imported from the main package `@renxqoo/agent-cli-sdk`):
+Building blocks provided by cli-kit (imported from the main package `@myriosx/cli-kit`):
 
 | Building block                                                                                                           | What it does                                                                                   |
 | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
@@ -701,7 +701,7 @@ import {
   type OAuthClientConfig,
   type PluginFactory,
   type TokenResult,
-} from "@renxqoo/agent-cli-sdk";
+} from "@myriosx/cli-kit";
 
 export function createCustomAuth<State>(options: {
   namespace: string;
@@ -779,14 +779,14 @@ See `05-credentials.md` for details.
 ```
 run() returns structured data
   ↓ transformOutput plugin (business-package defined) → changes the payload, but still structured (StructuredData)
-  ↓ agent-cli-sdk wraps into the unified output format + serializes (format: JSON/table)
+  ↓ cli-kit wraps into the unified output format + serializes (format: JSON/table)
   ↓ stdout
 ```
 
 | Layer                      | Defined by            | input→output             | Example                                |
 | -------------------------- | --------------------- | ------------------------ | -------------------------------------- |
 | transform (`transformOutput`) | business-package plugin | structured→StructuredData | drop fields, rename fields, (later) redact |
-| format                     | agent-cli-sdk         | structured→byte stream   | `{...}`→JSON text or a table           |
+| format                     | cli-kit         | structured→byte stream   | `{...}`→JSON text or a table           |
 
 **transform must never return a string** (the StructuredData type excludes it), otherwise the pipeline contract is broken.
 
@@ -798,7 +798,7 @@ plugin beforeCommand (pre→normal→post)     fill state, modify args
 command run(ctx, args)                     business logic, ctx.get sends the request, return {data, meta}
   ├ each ctx.get/post:
   │    plugin beforeRequest (pre→normal→post)  modify req (add header/sign/change path)
-  │    → actually send the request (inside agent-cli-sdk, with auth)
+  │    → actually send the request (inside cli-kit, with auth)
   │    plugin observeRequest (pre→normal→post)   audit/log (read-only res)
   ↓
 plugin transformOutput (pre→normal→post)      transform data (return StructuredData)
@@ -992,12 +992,12 @@ generate: defineCommand({
 
 ## Testing: vitest + createTestCtx
 
-agent-cli-sdk provides `createTestCtx`; business packages use it to mock ctx and test run logic:
+cli-kit provides `createTestCtx`; business packages use it to mock ctx and test run logic:
 
 ```ts
 // src/commands/orders.test.ts
 import { describe, it, expect } from "vitest";
-import { createTestCtx, errs } from "@renxqoo/agent-cli-sdk";
+import { createTestCtx, errs } from "@myriosx/cli-kit";
 import { ordersCommands } from "./orders";
 
 describe("orders list", () => {
@@ -1034,7 +1034,7 @@ describe("orders list", () => {
 
 ```ts
 // src/commands/orders.ts
-import { defineCommands, defineCommand, errs } from '@renxqoo/agent-cli-sdk'
+import { defineCommands, defineCommand, errs } from '@myriosx/cli-kit'
 import * as z from 'zod'
 
 interface Order { id: string; total: number; status: string }
@@ -1066,7 +1066,7 @@ export const ordersCommands = defineCommands({
 
 // src/index.ts
 #!/usr/bin/env node
-import { defineCli } from '@renxqoo/agent-cli-sdk'
+import { defineCli } from '@myriosx/cli-kit'
 import { ordersCommands } from './commands/orders'
 import { createCrmAuth } from './auth'
 

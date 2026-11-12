@@ -9,7 +9,7 @@
 业务包是独立 npm 包,按需安装:
 
 ```bash
-# 装一个业务包(它会自动带上对 agent-cli-sdk 的依赖)
+# 装一个业务包(它会自动带上对 cli-kit 的依赖)
 npm i -g @org/rxcli-orders
 
 # 装多个
@@ -67,7 +67,7 @@ o_1002   ¥89    已发货
 
 ## 本地过滤、选字段、排序 —— 全交给 jq
 
-agent-cli-sdk **不提供** `--filter` / `--fields` / `--sort` 这类本地过滤 flag。原因是 `jq` / `sort` / `uniq` 已经做得很好,agent 不用学新语法。
+cli-kit **不提供** `--filter` / `--fields` / `--sort` 这类本地过滤 flag。原因是 `jq` / `sort` / `uniq` 已经做得很好,agent 不用学新语法。
 
 ```bash
 # 过滤行:jq select
@@ -88,11 +88,11 @@ rxcli-orders list \
 
 **原则:左边 `rxcli` 只管出数据(透传后端 + 统一输出格式),右边的过滤/提取/排序全是 unix 工具。** 这是 unix 管道哲学,也是 agent 最熟悉的组合方式。
 
-> 什么 flag agent-cli-sdk 做、什么交给 jq?判断标准见 `00-overview.md` 的决策清单 #12、#13。
+> 什么 flag cli-kit 做、什么交给 jq?判断标准见 `00-overview.md` 的决策清单 #12、#13。
 >
-> - **服务端参数**(影响后端查询):`--limit`/`--offset`/`--status` 等 → agent-cli-sdk 做,因为本地触达不到后端
+> - **服务端参数**(影响后端查询):`--limit`/`--offset`/`--status` 等 → cli-kit 做,因为本地触达不到后端
 > - **本地数据操作**(改 stdout 内容):过滤/选字段/排序 → 交给 jq
-> - **输出格式**(统一输出序列化):JSON/table → agent-cli-sdk 做,因为它和输出契约绑定
+> - **输出格式**(统一输出序列化):JSON/table → cli-kit 做,因为它和输出契约绑定
 
 ---
 
@@ -147,8 +147,8 @@ rxcli-orders list --status unpaid \
 
 | 流         | 内容                                                             | 谁写                            |
 | ---------- | ---------------------------------------------------------------- | ------------------------------- |
-| **stdout** | **只有**统一输出 JSON(成功 `{ok,data,meta}`,空数组也是合法 JSON) | agent-cli-sdk 从 `run` 返回值序列化   |
-| **stderr** | 日志、进度、提示、警告、错误输出                                 | agent-cli-sdk 的 `ctx.log` + 错误渲染 |
+| **stdout** | **只有**统一输出 JSON(成功 `{ok,data,meta}`,空数组也是合法 JSON) | cli-kit 从 `run` 返回值序列化   |
+| **stderr** | 日志、进度、提示、警告、错误输出                                 | cli-kit 的 `ctx.log` + 错误渲染 |
 
 **铁律:业务命令永远不能直接往 stdout 写非统一输出格式内容。** 一切非数据输出走 `ctx.log`(stderr)。否则 `rxcli-orders list | jq` 混进一行"加载中..."整个管道就废了。
 
@@ -158,7 +158,7 @@ rxcli-orders list --status unpaid \
 
 ## 分页:agent 自决续拉
 
-后端数据可能很多,agent-cli-sdk 默认只取一页,但在统一输出格式 `meta` 里告诉你**完整性**和**续拉游标**:
+后端数据可能很多,cli-kit 默认只取一页,但在统一输出格式 `meta` 里告诉你**完整性**和**续拉游标**:
 
 ```bash
 $ rxcli-orders list --limit 30
@@ -184,9 +184,9 @@ $ rxcli-orders list --limit 30
 rxcli-orders list --limit 30 --page-token abc123
 ```
 
-**为什么不是自动全拉?** 因为有些查询不该自动拉 1 万条(慢、占上下文)。agent-cli-sdk 给 agent 足够信息(`complete` + `next_token`),让 agent 按场景决定续不续。比"强制流式全拉"更现实。
+**为什么不是自动全拉?** 因为有些查询不该自动拉 1 万条(慢、占上下文)。cli-kit 给 agent 足够信息(`complete` + `next_token`),让 agent 按场景决定续不续。比"强制流式全拉"更现实。
 
-> 业务命令如何实现分页协议(告诉 agent-cli-sdk 怎么翻页)?见 `02-sdk-guide.md` 的"分页实现"。
+> 业务命令如何实现分页协议(告诉 cli-kit 怎么翻页)?见 `02-sdk-guide.md` 的"分页实现"。
 
 ---
 

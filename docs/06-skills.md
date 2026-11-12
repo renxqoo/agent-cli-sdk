@@ -17,7 +17,7 @@
 
 ## skill reader:list / read / sync
 
-agent-cli-sdk 提供 skill 内容读取器(沿用前版设计,对齐 lark-cli 的 `skillcontent/reader.go`,带路径穿越校验)。agent 用这些命令自服务发现能力:
+cli-kit 提供 skill 内容读取器(沿用前版设计,对齐 lark-cli 的 `skillcontent/reader.go`,带路径穿越校验)。agent 用这些命令自服务发现能力:
 
 ### `skills list` — 列出所有 skill
 
@@ -301,7 +301,7 @@ rxcli skills sync
 框架内置 7 个默认 target(见上表 `DEFAULT_SKILL_TARGETS`),默认走探测。业务包可完全覆盖:
 
 ```ts
-import { defineCli } from "@renxqoo/agent-cli-sdk";
+import { defineCli } from "@myriosx/cli-kit";
 
 defineCli({
   // …

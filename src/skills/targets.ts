@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk/skills —— 同步目标(targets)组件
+ * @myriosx/cli-kit/skills —— 同步目标(targets)组件
  *
  * 设计依据:docs/06-skills.md "skill 同步机制"。
  *

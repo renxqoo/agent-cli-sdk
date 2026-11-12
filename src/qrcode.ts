@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk —— qrcode 内置命令
+ * @myriosx/cli-kit —— qrcode 内置命令
  *
  * 迁自 v1 commands/qrcode.ts。
  * 把 URL 生成二维码(终端 ASCII 或 PNG 文件),服务 agent split-flow 登录场景。

@@ -1,8 +1,8 @@
 /**
- * @renxqoo/agent-cli-sdk/skills —— skill 系统(reader + sync + targets + gen)
+ * @myriosx/cli-kit/skills —— skill 系统(reader + sync + targets + gen)
  *
  * 子路径导出(供自定义 skill 处理用):
- *   import { listSkills, readSkill, syncSkills, refreshAutogen } from '@renxqoo/agent-cli-sdk/skills'
+ *   import { listSkills, readSkill, syncSkills, refreshAutogen } from '@myriosx/cli-kit/skills'
  */
 
 export type { SkillInfo, DirEntry, ParsedFrontmatter } from "./reader.js";

@@ -1,8 +1,8 @@
 /**
- * @renxqoo/agent-cli-sdk/errs —— 9 类类型化错误 + exit code 映射
+ * @myriosx/cli-kit/errs —— 9 类类型化错误 + exit code 映射
  *
  * 设计依据:docs/04-errors.md。
- * 业务包 throw 类型化错误,agent-cli-sdk 捕获后渲染成统一输出格式到 stderr(见 envelope.ts)。
+ * 业务包 throw 类型化错误,cli-kit 捕获后渲染成统一输出格式到 stderr(见 envelope.ts)。
  * 裸 throw new Error(...) 会被兜底成 internal/unknown(exit 5)——所以永远用 errs.*。
  */
 
@@ -324,7 +324,7 @@ export function toCliError(err: unknown): CliError {
   return new InternalError({ subtype: "unknown", message, cause: err });
 }
 
-/** errs 命名空间导出(对齐文档 `import { errs } from '@renxqoo/agent-cli-sdk'` 用法)。 */
+/** errs 命名空间导出(对齐文档 `import { errs } from '@myriosx/cli-kit'` 用法)。 */
 export const errs = {
   CliError,
   ValidationError,

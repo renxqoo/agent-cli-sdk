@@ -1,9 +1,9 @@
 # 02 · SDK 开发指南
 
-> 2.0 请求默认值、API 入口与迁移说明见[生产契约](09-production-contracts.md)。
+> 0.0.1 请求默认值、API 入口与迁移说明见[生产契约](09-production-contracts.md)。
 
 
-> 给**业务包开发者**看。讲清楚怎么用 `@renxqoo/agent-cli-sdk` 写一个业务包:目录结构、ctx、命令、插件、auth、分页、测试。这是开发者最常翻的文档。
+> 给**业务包开发者**看。讲清楚怎么用 `@myriosx/cli-kit` 写一个业务包:目录结构、ctx、命令、插件、auth、分页、测试。这是开发者最常翻的文档。
 
 ---
 
@@ -14,7 +14,7 @@
 ```bash
 mkdir rxcli-orders && cd rxcli-orders
 pnpm init
-pnpm add @renxqoo/agent-cli-sdk
+pnpm add @myriosx/cli-kit
 ```
 
 ### 2. 目录结构
@@ -33,7 +33,7 @@ rxcli-orders/
         └── SKILL.md      ← 教 agent 怎么用(命令表自动生成)
 ```
 
-> 注意:没有 `client.ts`。agent-cli-sdk 取消了 client 概念,请求方法直接挂在 `ctx` 上。标准 OAuth、Bearer、API key 和 Basic 鉴权优先使用 `defineAuth`;只有 HMAC、mTLS 等特殊协议才手写 Plugin。
+> 注意:没有 `client.ts`。cli-kit 取消了 client 概念,请求方法直接挂在 `ctx` 上。标准 OAuth、Bearer、API key 和 Basic 鉴权优先使用 `defineAuth`;只有 HMAC、mTLS 等特殊协议才手写 Plugin。
 
 ### 3. package.json
 
@@ -49,17 +49,17 @@ rxcli-orders/
     "build": "tsc",
     "test": "vitest",
   },
-  "dependencies": { "@renxqoo/agent-cli-sdk": "^1.2.0" },
+  "dependencies": { "@myriosx/cli-kit": "^0.0.1" },
 }
 ```
 
-`@renxqoo/agent-cli-sdk` 仅提供 ESM。业务包必须使用 `"type": "module"` 和 ESM `import`;不支持 CommonJS `require()`。
+`@myriosx/cli-kit` 仅提供 ESM。业务包必须使用 `"type": "module"` 和 ESM `import`;不支持 CommonJS `require()`。
 
 ### 4. 入口 src/index.ts
 
 ```ts
 #!/usr/bin/env node
-import { defineCliApp, defineAuth } from "@renxqoo/agent-cli-sdk";
+import { defineCliApp, defineAuth } from "@myriosx/cli-kit";
 import { ordersCommands } from "./commands/orders.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -92,7 +92,7 @@ export default await defineCliApp<OrdersState>({
 
 ## 编程风格:function,不是 class
 
-agent-cli-sdk 采用 **function 风格 + 配置对象声明**(决策清单 #3)。理由:
+cli-kit 采用 **function 风格 + 配置对象声明**(决策清单 #3)。理由:
 
 - **组合 > 继承**:框架场景要组合(管道)、要 tree-shaking(发 npm)、要好测(mock 参数)。class 继承在这三方面都劣于 function。
 - **依赖注入而非隐式 this**:命令 `run(ctx, args)` 通过 `ctx` 拿到框架注入的能力(`ctx.get`、`ctx.log` 等),不靠 class 继承链的隐式 `this`。agent 读代码时无歧义。
@@ -134,7 +134,7 @@ async run(ctx, args) {
 
 ## TS 类型规范(用类型卡死约束)
 
-agent-cli-sdk 用 TS 类型系统强制规范结构约束。下表是"能用 TS 卡住的"和"卡不住需运行时补"的区分:
+cli-kit 用 TS 类型系统强制规范结构约束。下表是"能用 TS 卡住的"和"卡不住需运行时补"的区分:
 
 | 约束                             | 卡住方式                                          | TS 还是运行时            |
 | -------------------------------- | ------------------------------------------------- | ------------------------ |
@@ -257,7 +257,7 @@ defineCli<OrdersState>({ commands: ordersCommands, ... });
 
 ## ctx:请求与上下文
 
-`ctx` 是 agent-cli-sdk 注入给每个 `run(ctx, args)` 的上下文。**请求方法直接挂在 ctx 上(无 client 层);鉴权由 auth 插件 + agent-cli-sdk 内部处理,业务包无感。**
+`ctx` 是 cli-kit 注入给每个 `run(ctx, args)` 的上下文。**请求方法直接挂在 ctx 上(无 client 层);鉴权由 auth 插件 + cli-kit 内部处理,业务包无感。**
 
 ```ts
 interface CommandContext<State = {}> {
@@ -328,12 +328,12 @@ res.data; // unknown
 
 **泛型纯增强,不强制。**
 
-### 鉴权:由 auth 插件 + agent-cli-sdk 请求层处理
+### 鉴权:由 auth 插件 + cli-kit 请求层处理
 
 业务包**不接触**鉴权细节(token/refresh/header 注入)。这些由两部分自动完成:
 
-1. **auth 插件**(业务包自己写,用 agent-cli-sdk 基础块组装):beforeCommand 填 `ctx.state.user`、缓存 token,beforeRequest 注入 token header
-2. **agent-cli-sdk 请求层**:401 自动 refresh(singleflight)——前提是 auth 插件实现公开的 `handleUnauthorized` hook
+1. **auth 插件**(业务包自己写,用 cli-kit 基础块组装):beforeCommand 填 `ctx.state.user`、缓存 token,beforeRequest 注入 token header
+2. **cli-kit 请求层**:401 自动 refresh(singleflight)——前提是 auth 插件实现公开的 `handleUnauthorized` hook
 
 业务包只管 `ctx.get(...)` 发请求,token/header 自动带上。详见 `05-credentials.md`。
 
@@ -401,7 +401,7 @@ async run(ctx, args): Promise<CommandResult | void> {
 ### 单个命令(带三泛型)
 
 ```ts
-import { defineCommand, errs } from "@renxqoo/agent-cli-sdk";
+import { defineCommand, errs } from "@myriosx/cli-kit";
 import * as z from "zod";
 interface Order {
   id: string;
@@ -429,7 +429,7 @@ export const getOrder = defineCommand({
 
 ```ts
 // src/commands/orders.ts
-import { defineCommands, defineCommand, errs } from "@renxqoo/agent-cli-sdk";
+import { defineCommands, defineCommand, errs } from "@myriosx/cli-kit";
 import * as z from "zod";
 interface OrderListResult {
   items: Order[];
@@ -674,7 +674,7 @@ defineCli({ plugins: [tenantPlugin('acme')], ... })
 
 `defineAuth` 是标准认证工厂，返回的仍是普通 `Plugin`。OAuth、Bearer、API key 和 Basic 场景直接使用它；HMAC、mTLS 或复合认证才用下列基础块手写 `beforeCommand`、`beforeRequest` 与 `handleUnauthorized`。
 
-agent-cli-sdk 出的基础块(从主包 `@renxqoo/agent-cli-sdk` import):
+cli-kit 出的基础块(从主包 `@myriosx/cli-kit` import):
 
 | 基础块                                                                                                              | 作用                                                                  |
 | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -701,7 +701,7 @@ import {
   type OAuthClientConfig,
   type PluginFactory,
   type TokenResult,
-} from "@renxqoo/agent-cli-sdk";
+} from "@myriosx/cli-kit";
 
 export function createCustomAuth<State>(options: {
   namespace: string;
@@ -779,14 +779,14 @@ export function createCustomAuth<State>(options: {
 ```
 run() 返回结构化数据
   ↓ transformOutput 插件(业务包定义)→ 改 payload,但仍是结构化(StructuredData)
-  ↓ agent-cli-sdk 包装成统一输出格式 + 序列化(format:JSON/table)
+  ↓ cli-kit 包装成统一输出格式 + 序列化(format:JSON/table)
   ↓ stdout
 ```
 
 | 层                            | 谁定义     | 输入→输出             | 例子                         |
 | ----------------------------- | ---------- | --------------------- | ---------------------------- |
 | transform (`transformOutput`) | 业务包插件 | 结构化→StructuredData | 删字段、改字段名、(以后)脱敏 |
-| format                        | agent-cli-sdk    | 结构化→字节流         | `{...}`→JSON 文本 或 表格    |
+| format                        | cli-kit    | 结构化→字节流         | `{...}`→JSON 文本 或 表格    |
 
 **transform 永远不能返回 string**(StructuredData 类型排除),否则破坏管道契约。
 
@@ -798,7 +798,7 @@ run() 返回结构化数据
 命令 run(ctx, args)                     业务逻辑,ctx.get 发请求,return {data,meta}
   ├ 每次 ctx.get/post:
   │    插件 beforeRequest(pre→normal→post)  改 req(加 header/签名/改 path)
-  │    → 真正发请求(agent-cli-sdk 内部,带鉴权)
+  │    → 真正发请求(cli-kit 内部,带鉴权)
   │    插件 observeRequest(pre→normal→post)   审计/日志(只读 res)
   ↓
 插件 transformOutput(pre→normal→post)      transform data(返回 StructuredData)
@@ -992,12 +992,12 @@ generate: defineCommand({
 
 ## 测试:vitest + createTestCtx
 
-agent-cli-sdk 提供 `createTestCtx`,业务包用它 mock ctx 测 run 逻辑:
+cli-kit 提供 `createTestCtx`,业务包用它 mock ctx 测 run 逻辑:
 
 ```ts
 // src/commands/orders.test.ts
 import { describe, it, expect } from "vitest";
-import { createTestCtx, errs } from "@renxqoo/agent-cli-sdk";
+import { createTestCtx, errs } from "@myriosx/cli-kit";
 import { ordersCommands } from "./orders";
 
 describe("orders list", () => {
@@ -1034,7 +1034,7 @@ describe("orders list", () => {
 
 ```ts
 // src/commands/orders.ts
-import { defineCommands, defineCommand, errs } from '@renxqoo/agent-cli-sdk'
+import { defineCommands, defineCommand, errs } from '@myriosx/cli-kit'
 import * as z from 'zod'
 
 interface Order { id: string; total: number; status: string }
@@ -1066,7 +1066,7 @@ export const ordersCommands = defineCommands({
 
 // src/index.ts
 #!/usr/bin/env node
-import { defineCli } from '@renxqoo/agent-cli-sdk'
+import { defineCli } from '@myriosx/cli-kit'
 import { ordersCommands } from './commands/orders'
 import { createCrmAuth } from './auth'
 

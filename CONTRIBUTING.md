@@ -1,6 +1,6 @@
 # Contributing to rxcli
 
-Thanks for helping improve rxcli and `@renxqoo/agent-cli-sdk`.
+Thanks for helping improve rxcli and `@myriosx/cli-kit`.
 
 ## Before opening a change
 
@@ -21,7 +21,7 @@ pnpm lint          # oxlint (.oxlintrc.json)
 pnpm format:check  # oxfmt (.oxfmtrc.json); pnpm format rewrites files
 pnpm docs:check
 pnpm release:check --base HEAD
-pnpm --filter @renxqoo/agent-cli-sdk test:package
+pnpm --filter @myriosx/cli-kit test:package
 ```
 
 Linting uses [oxlint](https://oxc.rs/docs/guide/usage/linter) and formatting uses [oxfmt](https://oxc.rs/docs/guide/usage/formatter). Git hooks are managed by [husky](https://github.com/typicode/husky): `pre-commit` runs lint and format checks, `pre-push` runs typecheck and tests. Hooks install automatically on `pnpm install`; to skip them for a throwaway commit use `git commit --no-verify`.
@@ -47,6 +47,6 @@ Publishing never changes versions automatically. A release pull request must upd
 ## [@scope/package@1.2.3] - YYYY-MM-DD
 ```
 
-Record public API changes, user-visible behavior, breaking changes, and migration instructions. The release gate (`pnpm release:check --base <git-ref>`) validates SemVer, version increases, and one matching dated changelog entry. CI compares pull requests to their base SHA and main pushes to their previous SHA. Public API removals or changed default behavior require a major release and migration notes; the metadata gate does not infer every source-level breaking change.
+Record public API changes, user-visible behavior, breaking changes, and migration instructions. The release gate (`pnpm release:check --base <git-ref>`) validates SemVer, version increases within the same package name, and one matching dated changelog entry. A renamed package starts a new version history at exactly `0.0.1`, with a matching changelog entry for its new name; resetting the version of an existing package is rejected. CI compares pull requests to their base SHA and main pushes to their previous SHA. Public API removals or changed default behavior require a major release and migration notes; the metadata gate does not infer every source-level breaking change.
 
 By participating, you agree to follow `CODE_OF_CONDUCT.md`.

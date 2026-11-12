@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>agent-cli-sdk — one declaration, a CLI and an agent skill</title>
+<title>cli-kit — one declaration, a CLI and an agent skill</title>
 <meta name="description" content="A skill factory for your company APIs. Describe an API once; your agent generates the CLI and the skill — auth, unified output, typed errors and progressive disclosure included." />
 <link rel="alternate" hreflang="zh-CN" href="index.zh-CN.html" />
 <link rel="alternate" hreflang="en" href="index.html" />
@@ -253,7 +253,7 @@
 <body>
 
 <header class="wrap">
-  <div class="brand"><span class="scope">@renxqoo/</span><span class="pkg">agent-cli-sdk</span></div>
+  <div class="brand"><span class="scope">@myriosx/</span><span class="pkg">cli-kit</span></div>
   <nav>
     <a href="#how">How it works</a>
     <a href="#example">Example</a>
@@ -280,7 +280,7 @@
     <span><b>Node</b> ≥ 26 / <b>Bun</b> ≥ 1.4</span>
     <span><b>ESM</b> only</span>
     <span><b>9</b> typed errors</span>
-    <span><b>2.0</b> preview</span>
+    <span><b>0.0.1</b> preview</span>
     <span><b>MIT</b></span>
   </div>
 
@@ -292,7 +292,7 @@
       <span class="term-status">exit 0</span>
     </div>
     <div class="term-body">
-      <div class="line"><span class="prompt">$ </span><span class="cmd">npm install <span class="arg">@renxqoo/agent-cli-sdk</span></span></div>
+      <div class="line"><span class="prompt">$ </span><span class="cmd">npm install <span class="arg">@myriosx/cli-kit</span></span></div>
       <div class="line out">added 1 package in 2.1s</div>
       <div class="line out"># the package ships <span class="k">skills/agent-cli-builder</span> — install it into your agent:</div>
       <div class="line out">#   "install this skill: github.com/renxqoo/agent-cli-sdk/tree/main/skills/agent-cli-builder"</div>
@@ -338,7 +338,7 @@
     <h2>One declaration, dual use</h2>
     <p class="lead">The same command is a human CLI and an agent skill — one source, never drifting apart.</p>
     <div class="code-label">The entire business code for one command</div>
-    <pre class="code">import { defineCli, defineCommand } from "@renxqoo/agent-cli-sdk";
+    <pre class="code">import { defineCli, defineCommand } from "@myriosx/cli-kit";
 import * as z from "zod";
 
 const app = defineCli({
@@ -370,7 +370,7 @@ const app = defineCli({
 });
 
 export default app;</pre>
-    <p class="lead" style="margin-top:24px;font-size:14px;">This example targets 2.x; this branch's 2.0.0 has not been published yet. Check your installed version first. The business bin calls <code>app.run(argv)</code> from its real entry point. See <a href="https://github.com/renxqoo/agent-cli-sdk/blob/main/docs/09-production-contracts.en.md">production contracts and migration</a> for entry-point and upgrade guidance.</p>
+    <p class="lead" style="margin-top:24px;font-size:14px;">This example targets 0.0.1; this branch's 0.0.1 has not been published yet. Check your installed version first. The business bin calls <code>app.run(argv)</code> from its real entry point. See <a href="https://github.com/renxqoo/agent-cli-sdk/blob/main/docs/09-production-contracts.en.md">production contracts and migration</a> for entry-point and upgrade guidance.</p>
 
     <p style="margin-top:14px; color:var(--ink-soft); font-size:14px;">
       Humans run <code style="font-family:var(--mono);font-size:13px;background:var(--paper-3);padding:1px 6px;border-radius:3px">acme orders list --json | jq</code>.
@@ -411,7 +411,7 @@ export default app;</pre>
     var btn = document.querySelector('.copy-btn');
     if (!btn) return;
     btn.addEventListener('click', function () {
-      var text = '@renxqoo/agent-cli-sdk';
+      var text = '@myriosx/cli-kit';
       function done() {
         btn.classList.add('done');
         btn.textContent = 'copied';

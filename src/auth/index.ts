@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk —— defineAuth:OAuth 2.1 鉴权工厂
+ * @myriosx/cli-kit —— defineAuth:OAuth 2.1 鉴权工厂
  *
  * 把标准 OAuth 2.1 三种流程收编成框架层的一个插件工厂(同步):
  *   - device(设备授权,RFC 8628)—— 受限设备的交互流程,默认

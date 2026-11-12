@@ -3,7 +3,7 @@
  * 读取业务包的 name / bin / version。
  *
  * 从 define.ts 抽出(define.ts 职责过多,探测逻辑与命令定义/App 装配无关)。
- * 跳过 agent-cli-sdk 自己(@renxqoo/agent-cli-sdk)与 monorepo 根,避免版本串读。
+ * 跳过 cli-kit 自己(@myriosx/cli-kit)与 monorepo 根,避免版本串读。
  */
 import { existsSync, readFileSync } from "node:fs";
 import { realpathSync } from "node:fs";
@@ -40,8 +40,8 @@ export function detectBinName(): string | undefined {
           name?: string;
           bin?: string | Record<string, string>;
         };
-        // 跳过 agent-cli-sdk 自己 / monorepo 根(无 bin 或 bin 不是业务命令)
-        if (pkg.name === "@renxqoo/agent-cli-sdk" || !pkg.bin) {
+        // 跳过 cli-kit 自己 / monorepo 根(无 bin 或 bin 不是业务命令)
+        if (pkg.name === "@myriosx/cli-kit" || !pkg.bin) {
           dir = dirname(dir);
           continue;
         }
@@ -77,8 +77,8 @@ export function detectVersion(): string {
             name?: string;
             version?: string;
           };
-          // 跳过 agent-cli-sdk 自己 / monorepo 根(agent-cli-sdk 版本 ≠ 业务包版本)
-          if (pkg.name === "@renxqoo/agent-cli-sdk" || !pkg.version) {
+          // 跳过 cli-kit 自己 / monorepo 根(cli-kit 版本 ≠ 业务包版本)
+          if (pkg.name === "@myriosx/cli-kit" || !pkg.version) {
             dir = dirname(dir);
             continue;
           }
@@ -101,7 +101,7 @@ export interface BizPackageInfo {
 
 /**
  * 探测当前业务包的 { name, bin, version }(install 向导用)。
- * 从 process.argv[1](实际入口)往上找 package.json,跳过 agent-cli-sdk 自己 / monorepo 根。
+ * 从 process.argv[1](实际入口)往上找 package.json,跳过 cli-kit 自己 / monorepo 根。
  */
 export function detectBizPackage(): BizPackageInfo | null {
   try {
@@ -116,8 +116,8 @@ export function detectBizPackage(): BizPackageInfo | null {
           version?: string;
           bin?: string | Record<string, string>;
         };
-        // 跳过 agent-cli-sdk 自己 / monorepo 根(无 bin 或不是业务命令)
-        if (pkg.name === "@renxqoo/agent-cli-sdk" || !pkg.bin) {
+        // 跳过 cli-kit 自己 / monorepo 根(无 bin 或不是业务命令)
+        if (pkg.name === "@myriosx/cli-kit" || !pkg.bin) {
           dir = dirname(dir);
           continue;
         }

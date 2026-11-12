@@ -1,6 +1,6 @@
 # 03 · Output Contract
 
-> The unified output format is agent-cli-sdk's most central data structure. All stdout output must be success output, and all stderr errors must be error output. This document defines their exact fields, stability guarantees, and the stdout/stderr allocation rules. **Both agents and implementers must obey this contract.**
+> The unified output format is cli-kit's most central data structure. All stdout output must be success output, and all stderr errors must be error output. This document defines their exact fields, stability guarantees, and the stdout/stderr allocation rules. **Both agents and implementers must obey this contract.**
 
 ---
 
@@ -21,9 +21,9 @@ The design borrows lark-cli's RFC 7807-aligned error output + success output pat
 
 **The unified output format is a wire format (JSON on the wire), and all field names are snake_case**: e.g. `next_token`, `missing_scopes`, `dry_run`. This follows JSON/wire convention (lark-cli and most REST APIs do this), and agents and shell tools (jq) read values by snake_case.
 
-**TS code uses camelCase**: `meta.pagination.nextToken`, `err.missingScopes`. When agent-cli-sdk serializes a command's `run` return value (`CommandResult`) into the unified output format, it **automatically converts camelCase to snake_case** when writing to the wire; business packages write code in camelCase without manual conversion.
+**TS code uses camelCase**: `meta.pagination.nextToken`, `err.missingScopes`. When cli-kit serializes a command's `run` return value (`CommandResult`) into the unified output format, it **automatically converts camelCase to snake_case** when writing to the wire; business packages write code in camelCase without manual conversion.
 
-> In other words: the field names in all JSON examples in this document are in wire form (snake_case); the field names in the TS code in `02-sdk-guide.md` are in code form (camelCase). The two correspond one-to-one, and agent-cli-sdk handles the conversion. Single words like `ok` / `data` / `meta` have no separators, so they are identical in both forms.
+> In other words: the field names in all JSON examples in this document are in wire form (snake_case); the field names in the TS code in `02-sdk-guide.md` are in code form (camelCase). The two correspond one-to-one, and cli-kit handles the conversion. Single words like `ok` / `data` / `meta` have no separators, so they are identical in both forms.
 
 ---
 
@@ -119,13 +119,13 @@ When a command or plugin `throw`s a typed error (`errs.*`), the error first ente
 run / hook throw err
   ↓
 Is err of type errs.*? → yes: go straight into the observeError/handleError chain
-  ↓ no (bare Error, etc.): agent-cli-sdk wraps it as InternalError(unknown) and sends it into the observeError/handleError chain
+  ↓ no (bare Error, etc.): cli-kit wraps it as InternalError(unknown) and sends it into the observeError/handleError chain
 observeError/handleError chain (pre→normal→post plugins, each runs; if unhandled return the original err, if handled return the new err)
   ↓
 final err → render error output by Category → stderr + matching exit code
 ```
 
-**Key: throw must use `errs.*` typed errors.** A bare `throw new Error('...')` gets fallback-treated as `internal/unknown` (exit 5), which agents will misread as an agent-cli-sdk bug. See `04-errors.md`.
+**Key: throw must use `errs.*` typed errors.** A bare `throw new Error('...')` gets fallback-treated as `internal/unknown` (exit 5), which agents will misread as an cli-kit bug. See `04-errors.md`.
 
 ### Top-Level Fields (Same as Success Output)
 
@@ -168,10 +168,10 @@ This is the root of why pipes compose, an **iron rule that must not be broken**:
 | Content                       | Stream     | Written by                      |
 | ----------------------------- | ---------- | ------------------------------- |
 | Success output (`{ok:true,...}`)  | **stdout** | Framework serializes the `run` return value |
-| Error output (`{ok:false,...}`)   | **stderr** | agent-cli-sdk error rendering layer |
+| Error output (`{ok:false,...}`)   | **stderr** | cli-kit error rendering layer |
 | Logs (info/warn/error)        | **stderr** | `ctx.log.*()`                   |
-| Progress bar / spinner        | **stderr** | agent-cli-sdk progress layer    |
-| Hints (empty results, guidance) | **stderr** | agent-cli-sdk hint layer      |
+| Progress bar / spinner        | **stderr** | cli-kit progress layer    |
+| Hints (empty results, guidance) | **stderr** | cli-kit hint layer      |
 | System notifications (e.g. version updates) | **stderr** | `createUpdateNotifier` |
 
 **Business commands must never write non-unified-output content directly to stdout.** All non-data output goes through `ctx.log` (stderr). Otherwise `rxcli-orders list | jq` would get a stray "loading..." line mixed in and the whole pipe would break.
@@ -181,7 +181,7 @@ This is the root of why pipes compose, an **iron rule that must not be broken**:
 Version reminders are runtime environment information, not business data. Business packages can explicitly register `createUpdateNotifier`:
 
 ```ts
-import { createUpdateNotifier, defineCliApp } from "@renxqoo/agent-cli-sdk";
+import { createUpdateNotifier, defineCliApp } from "@myriosx/cli-kit";
 
 const app = await defineCliApp({
   dir: appStateDir,
@@ -249,7 +249,7 @@ When a query returns 0 records:
 
 **An empty result ≠ an error.** Exit code 0, stdout is the empty-array unified output format. Don't throw an empty result as an error (that would make agents think something went wrong).
 
-Optional: agent-cli-sdk prints a one-line "(0 records)" hint to stderr for humans, but stdout stays clean.
+Optional: cli-kit prints a one-line "(0 records)" hint to stderr for humans, but stdout stays clean.
 
 ---
 
@@ -273,7 +273,7 @@ When a command is the upstream of a pipe, each record that the downstream reads 
 | `data` |    ❌    | payload (already transformed by `transformOutput`)                                                                                    |
 | `meta` |    ❌    | Optional metadata (source command, timestamp)                                                                                         |
 
-> **Note: PipeRecord is the form the downstream reads via `ctx.pipe.in()`, not the stdout unified output format itself.** stdout is still a complete unified output format `{ok, data, meta}`; when data is an array, agent-cli-sdk wraps each record into a PipeRecord for downstream to consume one at a time. For a single-object command (data is not an array) in a pipe, the downstream receives a single `{type, id, data}`.
+> **Note: PipeRecord is the form the downstream reads via `ctx.pipe.in()`, not the stdout unified output format itself.** stdout is still a complete unified output format `{ok, data, meta}`; when data is an array, cli-kit wraps each record into a PipeRecord for downstream to consume one at a time. For a single-object command (data is not an array) in a pipe, the downstream receives a single `{type, id, data}`.
 
 See "Pipe: as a downstream command" in `02-sdk-guide.md`.
 
@@ -296,7 +296,7 @@ A common traditional CLI pattern is a synchronous `console.log(JSON.stringify(bo
 ## The Output Contract's Stability Guarantees
 
 - `ok`, `error.type`, `error.subtype`, `error.code`, `error.retryable` are **wire-stable** and don't change across major versions. Renaming them is a breaking change.
-- The shape of `data` and `meta.pagination` is decided by the business command; agent-cli-sdk only guarantees that the three top-level keys `ok`/`data`/`meta` are stable.
+- The shape of `data` and `meta.pagination` is decided by the business command; cli-kit only guarantees that the three top-level keys `ok`/`data`/`meta` are stable.
 - `message` / `hint` wording may improve; agents must not branch on specific text.
 - Newly added top-level fields (e.g. a future `_deprecation`) use an underscore prefix to mark them as non-business fields, so older consumers can ignore them without error.
 

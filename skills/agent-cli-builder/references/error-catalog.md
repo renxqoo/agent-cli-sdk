@@ -56,7 +56,7 @@ HTTP 4xx/5xx throw by default in 2.0. Use global mapping to override shared mean
 ## 3. Typed error examples
 
 ```ts
-import { errs } from "@renxqoo/agent-cli-sdk";
+import { errs } from "@myriosx/cli-kit";
 
 throw new errs.ValidationError({
   subtype: "out_of_range",
@@ -99,7 +99,7 @@ For structured writes, do not throw this manually. Declare `policy.confirmation:
 Prefer standard subtypes. If a genuinely new subtype is required, register it before `defineCli` assembly:
 
 ```ts
-import { SUBTYPE_REGISTRY } from "@renxqoo/agent-cli-sdk";
+import { SUBTYPE_REGISTRY } from "@myriosx/cli-kit";
 SUBTYPE_REGISTRY.my_service_conflict = { category: "api" };
 ```
 

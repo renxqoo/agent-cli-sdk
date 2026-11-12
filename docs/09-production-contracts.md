@@ -1,6 +1,6 @@
-# 2.0 生产契约与迁移
+# 0.0.1 生产契约与迁移
 
-本文描述 2.0.0 的公开契约。此前运行时变更的历史与数据兼容说明见 [运行时迁移](08-runtime-refactor.md)。
+本文描述 0.0.1 的公开契约。此前运行时变更的历史与数据兼容说明见 [运行时迁移](08-runtime-refactor.md)。
 
 ## 目标与边界
 
@@ -12,11 +12,11 @@ SDK 面向 Node.js 26+ / Bun 1.4+ 的独立 CLI。`App.run()` 读写进程标准
 
 | 入口 | 使用者与职责 |
 | --- | --- |
-| `@renxqoo/agent-cli-sdk` | 业务作者：应用/命令/认证工厂、插件和上下文类型、错误、输出、测试工具 |
-| `@renxqoo/agent-cli-sdk/advanced` | 运行时集成者：插件装配与调度、上下文/HTTP adapter 工厂、命令执行器、管道读取器 |
-| `@renxqoo/agent-cli-sdk/credentials` | 自定义凭证 provider 和 ConfigStore |
-| `@renxqoo/agent-cli-sdk/skills` | Skill 发现、生成、同步及格式辅助工具 |
-| `@renxqoo/agent-cli-sdk/errs` | 错误类、分类与退出码 |
+| `@myriosx/cli-kit` | 业务作者：应用/命令/认证工厂、插件和上下文类型、错误、输出、测试工具 |
+| `@myriosx/cli-kit/advanced` | 运行时集成者：插件装配与调度、上下文/HTTP adapter 工厂、命令执行器、管道读取器 |
+| `@myriosx/cli-kit/credentials` | 自定义凭证 provider 和 ConfigStore |
+| `@myriosx/cli-kit/skills` | Skill 发现、生成、同步及格式辅助工具 |
+| `@myriosx/cli-kit/errs` | 错误类、分类与退出码 |
 
 以上入口均遵守 SemVer。`advanced` 表示调用者承担生命周期顺序与进程 I/O 责任，不表示可以无版本约束地破坏兼容。未列入 `package.json.exports` 的内部文件不属于公开 API。移除公开 API、改变默认失败语义或提升最低运行时要求须通过 major 版本发布，并附消费者迁移说明。
 
@@ -34,9 +34,9 @@ SDK 面向 Node.js 26+ / Bun 1.4+ 的独立 CLI。`App.run()` 读写进程标准
 - 请求时限不包含任意插件执行或共享 OAuth 刷新的耗时。OAuthClient 的协议调用保留自己的 30 秒时限。插件应使其异步钩子可终止；需要覆盖整段操作时，调用方可传 `AbortSignal.timeout(...)`。
 
 ```ts
-import { defineCli } from "@renxqoo/agent-cli-sdk";
-import { setupPlugins } from "@renxqoo/agent-cli-sdk/advanced";
-import { generateAutogenBlock } from "@renxqoo/agent-cli-sdk/skills";
+import { defineCli } from "@myriosx/cli-kit";
+import { setupPlugins } from "@myriosx/cli-kit/advanced";
+import { generateAutogenBlock } from "@myriosx/cli-kit/skills";
 
 // 应用默认值：defineCli({ ..., requestTimeoutMs: 15_000 })。
 const response = await ctx.get("/orders", { limit: 20 }, {
@@ -52,7 +52,7 @@ if (inspected.status >= 400) { /* 处理剩余错误，或使用 advanced.throwF
 
 ## 迁移矩阵与实施顺序
 
-| 原行为 | 2.0 行为与消费者动作 | 验证入口 |
+| 原行为 | 0.0.1 行为与消费者动作 | 验证入口 |
 | --- | --- | --- |
 | 未映射 HTTP 错误返回成功 | 默认抛错；手动状态分支显式传 allowHttpErrors | production-request、打包消费者失败命令 |
 | 请求没有 SDK 默认时限 | 默认 30 秒；长操作显式设置应用或单次时限 | production-request、request-network |
@@ -61,7 +61,7 @@ if (inspected.status >= 400) { /* 处理剩余错误，或使用 advanced.throwF
 | 发布约束只有文档描述 | CI 比较 Git 基线并校验版本与 changelog | release-gate、release:check |
 | 凭证与 Skill 持久化格式 | 保留本轮前格式及已有事务/恢复协议 | 全量会话、跨进程、Skill 回归 |
 
-先迁移业务命令的状态检查，再更新导入路径和时限配置，随后运行消费者类型/行为测试。发布由调用方明确执行；本轮仅准备 2.0.0 成品。回退应将消费者与 SDK 一起退回先前版本；本轮没有新增数据格式迁移。
+先迁移业务命令的状态检查，再更新导入路径和时限配置，随后运行消费者类型/行为测试。发布由调用方明确执行；本轮仅准备 0.0.1 成品。回退应将消费者与 SDK 一起退回先前版本；本轮没有新增数据格式迁移。
 
 ## 验证与发布
 

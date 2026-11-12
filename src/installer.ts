@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk —— defineInstaller:安装向导插件
+ * @myriosx/cli-kit —— defineInstaller:安装向导插件
  *
  * 把安装向导收编为一个内部插件:提供顶层 `install` 命令(`skipPluginHooks`,
  * 因此在登录前也能跑),命令体复用 install-workflow(纯策略)+ install-wizard(Node 适配)。

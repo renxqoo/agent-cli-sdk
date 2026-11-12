@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk/credentials —— provider chain + 默认 5 个 provider
+ * @myriosx/cli-kit/credentials —— provider chain + 默认 5 个 provider
  *
  * 设计依据:docs/05-credentials.md "provider chain"。
  * chain 按 priority 从小到大逐个调用,命中即停(返回非 null)。

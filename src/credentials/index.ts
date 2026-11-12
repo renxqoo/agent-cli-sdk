@@ -1,9 +1,9 @@
 /**
- * @renxqoo/agent-cli-sdk/credentials —— 凭证与 provider chain 公共入口
+ * @myriosx/cli-kit/credentials —— 凭证与 provider chain 公共入口
  *
  * 子路径导出(供自定义 provider 实现者用):
- *   import type { CredentialProvider, ConfigStore } from '@renxqoo/agent-cli-sdk/credentials'
- *   import { fileStore, memoryStore } from '@renxqoo/agent-cli-sdk/credentials'
+ *   import type { CredentialProvider, ConfigStore } from '@myriosx/cli-kit/credentials'
+ *   import { fileStore, memoryStore } from '@myriosx/cli-kit/credentials'
  */
 
 export type {

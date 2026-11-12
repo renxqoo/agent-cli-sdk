@@ -1,6 +1,6 @@
 ---
 name: agent-cli-builder
-description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的 TypeScript CLI。当用户要新建命令行工具、把 API 或内部服务封装成 CLI，或为基于该框架的 CLI 增加鉴权、结构化输出、错误处理、分页、管道、Skill 分发或测试时使用；通用 shell 脚本、非 CLI 应用及明确采用其他 CLI 框架的任务不使用。
+description: 使用 @myriosx/cli-kit 构建或改造供 AI agent 调用的 TypeScript CLI。当用户要新建命令行工具、把 API 或内部服务封装成 CLI，或为基于该框架的 CLI 增加鉴权、结构化输出、错误处理、分页、管道、Skill 分发或测试时使用；通用 shell 脚本、非 CLI 应用及明确采用其他 CLI 框架的任务不使用。
 ---
 
 # Agent CLI Builder（中文）
@@ -95,7 +95,7 @@ description: 使用 @renxqoo/agent-cli-sdk 构建或改造供 AI agent 调用的
 - 省略 `args` 表示无业务参数；省略 `args.type` 默认 argv；`pos` 只列位置字段。一个命令只能是 argv 或 JSON，不能共存。
 - JSON 参数必须是来自 `--input`、`--input-file` 或原生重定向/管道 stdin 的一个完整文档；没有 `--input-stdin`，也不能与业务 flags 合并。
 - 幂等键由调用方生成并在重试时复用；不得根据载荷内容派生。
-- 本文针对 SDK 2.x。先核对已解析的依赖版本；现有 1.x 项目应明确迁移后再使用 2.x API，不静默升级。
+- 本文针对 SDK 0.0.1。先核对已解析的依赖版本；使用旧接口的项目应明确迁移后再使用 0.0.1 API，不静默升级。
 - HTTP 4xx/5xx 默认在 `ctx.*` 返回前抛错；最终 401 保持认证类别。手动状态分支必须显式使用 `allowHttpErrors`。
 - 请求默认每次物理 I/O 超时 30 秒，覆盖响应体；应用用 `requestTimeoutMs`，单次用 `RequestControls.timeout/signal`。取消为不可重试的 `network/cancelled`，不得自动重发写入。
 - 业务 API 从根入口导入；调度器、上下文和 transport 工厂从 `/advanced` 导入；Skill 工具从 `/skills` 导入。所有公开入口遵守 SemVer。

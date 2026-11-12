@@ -1,5 +1,5 @@
 /**
- * @renxqoo/agent-cli-sdk —— 管道(pipe)
+ * @myriosx/cli-kit —— 管道(pipe)
  *
  * 设计依据:docs/01-cli-usage.md "管道用法"、docs/03-envelopes.md "PipeRecord"。
  * 方案(已批准):统一输出格式整包。上游 stdout 是完整统一输出格式 {ok,data,meta};

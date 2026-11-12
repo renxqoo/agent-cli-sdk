@@ -1,6 +1,6 @@
 ---
 name: agent-cli-builder
-description: Build or modernize TypeScript CLIs for AI agents with @renxqoo/agent-cli-sdk. Use when a user wants a new command-line tool, an API or internal service wrapped as a CLI, or an existing agent-cli-sdk app extended with authentication, structured output, typed errors, pagination, pipes, Skill distribution, or tests. Do not use for generic shell scripts, non-CLI applications, or tasks that explicitly require another CLI framework.
+description: Build or modernize TypeScript CLIs for AI agents with @myriosx/cli-kit. Use when a user wants a new command-line tool, an API or internal service wrapped as a CLI, or an existing cli-kit app extended with authentication, structured output, typed errors, pagination, pipes, Skill distribution, or tests. Do not use for generic shell scripts, non-CLI applications, or tasks that explicitly require another CLI framework.
 ---
 
 # Agent CLI Builder
@@ -93,7 +93,7 @@ Do not claim production readiness from a successful build alone. Report unverifi
 - Omitted `args` means no business parameters. Omitted `args.type` means argv; `pos` names positional schema fields. One command is either argv or JSON, never both.
 - JSON args use exactly one complete document from `--input`, `--input-file`, or native redirected/piped stdin. There is no `--input-stdin`, and JSON never merges with business flags.
 - Caller-owned idempotency keys must be reused across retries; never derive them from payload content.
-- These contracts target SDK 2.x. Check the resolved dependency; migrate existing 1.x apps explicitly before using 2.x APIs, without silently upgrading them.
+- These contracts target SDK 0.0.1. Check the resolved dependency; migrate apps using earlier APIs explicitly before using 0.0.1 APIs, without silently upgrading them.
 - HTTP 4xx/5xx throw before `ctx.*` returns; final 401 retains authentication classification. Manual status branches require explicit `allowHttpErrors`.
 - Each physical HTTP attempt has a 30-second default timeout, including its body. Configure app `requestTimeoutMs` or per-request `RequestControls.timeout/signal`. Cancellation is non-retryable `network/cancelled`; do not automatically replay writes.
 - Import business APIs from the root, runtime dispatch/context/transport factories from `/advanced`, and Skill utilities from `/skills`. All public entry points follow SemVer.

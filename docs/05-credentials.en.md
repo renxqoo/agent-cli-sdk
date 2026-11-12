@@ -19,9 +19,9 @@ OAuth endpoints share one client identity policy: a nonempty `clientSecret` uses
 
 ---
 
-## Building Blocks Provided by agent-cli-sdk
+## Building Blocks Provided by cli-kit
 
-Import from the main package `@renxqoo/agent-cli-sdk`, no subpath needed:
+Import from the main package `@myriosx/cli-kit`, no subpath needed:
 
 | Building block                                                                                                                                               | What it does                                                                                   |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
@@ -52,7 +52,7 @@ import {
   type OAuthClientConfig,
   type PluginFactory,
   type TokenResult,
-} from "@renxqoo/agent-cli-sdk";
+} from "@myriosx/cli-kit";
 
 export function createCustomAuth<State>(options: {
   namespace: string;
@@ -168,7 +168,7 @@ export interface CredentialProvider {
 
 export interface ProviderContext {
   namespace: string; // namespace
-  configStore: ConfigStore; // agent-cli-sdk's config storage (reads/writes files directly, not via the chain)
+  configStore: ConfigStore; // cli-kit's config storage (reads/writes files directly, not via the chain)
   args: Record<string, unknown>; // command args (reads --api-key, etc.)
   env: NodeJS.ProcessEnv; // environment variables
 }
@@ -243,7 +243,7 @@ defineCli({ plugins: [auth, signPlugin], ... })
 | **Authentication** (get token, inject header, fill user)   | `defineAuth`; special protocols use the provider chain | put the returned Plugin into `plugins` |
 | **Non-auth cross-cutting** (fixed args, signing, formatting, errors, audit) | ordinary plugin hooks               | write a Plugin object and put it into `plugins` |
 
-**The provider chain is provided by agent-cli-sdk's `resolveWithChain`**; business packages do not call `credentials.register()` directly (removed). All authentication goes through a self-written auth Plugin (which calls the provider chain); non-auth cross-cutting uses ordinary plugins and does not go through the provider chain.
+**The provider chain is provided by cli-kit's `resolveWithChain`**; business packages do not call `credentials.register()` directly (removed). All authentication goes through a self-written auth Plugin (which calls the provider chain); non-auth cross-cutting uses ordinary plugins and does not go through the provider chain.
 
 ---
 
@@ -268,7 +268,7 @@ The app decides the root directory exactly once via `defineCliApp({ dir })`. The
 > **Security contract**:
 > - Credentials and config are stored **in plaintext at-rest**, protected only by filesystem permissions (no obfuscation/encryption). If you need at-rest encryption, keep them in an external store such as the OS keychain.
 > - `0600` (files) / `0700` (directories) only take effect on **POSIX**; Windows doesn't support chmod, and file ACLs inherit from the parent directory.
-> - The storage directory is decided exactly once by the business app via `defineCliApp({ dir })`; `defineAuth`, `createUpdateNotifier`, and `defineInstaller` receive the same localState through `setup(services)`. agent-cli-sdk **does not ship a default directory**, and the high-level APIs never accept a directory parameter.
+> - The storage directory is decided exactly once by the business app via `defineCliApp({ dir })`; `defineAuth`, `createUpdateNotifier`, and `defineInstaller` receive the same localState through `setup(services)`. cli-kit **does not ship a default directory**, and the high-level APIs never accept a directory parameter.
 > - Credential/config file reads go through the same **strict bounded parser** as command input (rejects duplicate keys and unsafe keys, limits depth/size).
 > - The OAuth refresh "read → exchange token → write" transaction is protected by a **cross-process file lock** (`ConfigStore.transactCredentials`), avoiding lost updates when concurrent CLIs overwrite each other.
 
@@ -287,7 +287,7 @@ The app decides the root directory exactly once via `defineCliApp({ dir })`. The
 }
 ```
 
-All fields are optional — OAuth uses `token`/`refreshToken`/`expiresAt`, API key uses `apiKey`, HMAC uses custom fields (`accessKey`/`secretKey`). agent-cli-sdk does not impose a structure.
+All fields are optional — OAuth uses `token`/`refreshToken`/`expiresAt`, API key uses `apiKey`, HMAC uses custom fields (`accessKey`/`secretKey`). cli-kit does not impose a structure.
 
 ### Reading/Writing Credentials at Runtime in a Business Package
 
@@ -312,7 +312,7 @@ await ctx.credentials.clear("orders");
 
 ### The ConfigStore Interface (for provider implementers)
 
-`ProviderContext.configStore` is agent-cli-sdk's config/credential storage abstraction, reading/writing disk files directly (not via the provider chain). Interface:
+`ProviderContext.configStore` is cli-kit's config/credential storage abstraction, reading/writing disk files directly (not via the provider chain). Interface:
 
 ```ts
 export interface ConfigStore {
@@ -338,7 +338,7 @@ export interface ConfigStore {
 
 ## First-Run Onboarding
 
-When the provider chain misses entirely, the auth Plugin throws `AuthenticationError`, and agent-cli-sdk triggers first-run onboarding (only on an interactive TTY; CI/non-interactive environments error out directly):
+When the provider chain misses entirely, the auth Plugin throws `AuthenticationError`, and cli-kit triggers first-run onboarding (only on an interactive TTY; CI/non-interactive environments error out directly):
 
 ```bash
 $ rxcli-orders list
@@ -367,7 +367,7 @@ The onboarding copy can be injected by the business package (via defineCli's `me
 
 ## Credential Redaction (Logging Discipline)
 
-Credential values must **never** appear in visible stdout/stderr output. agent-cli-sdk enforces:
+Credential values must **never** appear in visible stdout/stderr output. cli-kit enforces:
 
 - When `ctx.log` prints a request, the auth header is redacted automatically: `Authorization: Bearer ey...` → `Authorization: Bearer [REDACTED]`
 - If credentials leak into error messages, the `handleError` plugin must redact them (see `04-errors.md`)

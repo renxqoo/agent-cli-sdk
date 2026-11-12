@@ -5,7 +5,7 @@ Use JSON mode when a create, update, batch, or nested request would require many
 
 ```ts
 import * as z from "zod";
-import { defineCommand } from "@renxqoo/agent-cli-sdk";
+import { defineCommand } from "@myriosx/cli-kit";
 
 const CreateOrder = z
   .strictObject({

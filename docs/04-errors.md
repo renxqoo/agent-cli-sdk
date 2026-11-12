@@ -1,12 +1,12 @@
 # 04 · 错误分类与 exit code
 
-> agent-cli-sdk 用 9 类类型化错误 + exit code 映射,把"命令失败"变成 agent 可精确分支的结构化信号。业务包 throw 类型化错误,agent-cli-sdk 统一渲染成错误输出到 stderr。本文档定义 9 个 Category、构造器签名、hint 规范、何时 throw。
+> cli-kit 用 9 类类型化错误 + exit code 映射,把"命令失败"变成 agent 可精确分支的结构化信号。业务包 throw 类型化错误,cli-kit 统一渲染成错误输出到 stderr。本文档定义 9 个 Category、构造器签名、hint 规范、何时 throw。
 
 ---
 
 ## 设计原则
 
-1. **业务包只 throw 类型化错误**,不 throw 裸 `Error`。agent-cli-sdk 捕获后渲染成统一输出格式(见 `03-envelopes.md`)。**裸 `throw new Error(...)` 会被兜底成 `internal/unknown`(exit 5)**,agent 会误解成 agent-cli-sdk bug——所以永远用 `errs.*`。
+1. **业务包只 throw 类型化错误**,不 throw 裸 `Error`。cli-kit 捕获后渲染成统一输出格式(见 `03-envelopes.md`)。**裸 `throw new Error(...)` 会被兜底成 `internal/unknown`(exit 5)**,agent 会误解成 cli-kit bug——所以永远用 `errs.*`。
 2. **exit code 由 Category 决定**,业务包不用自己设 exit code。
 3. **hint 字段是给 agent 的可执行指令**,不是给人看的解释。
 4. **错误 wrap 不可降级**:下层已返回类型化错误时,透传不 re-wrap。
@@ -36,7 +36,7 @@
 
 ## 构造器签名
 
-所有错误类型都继承自 `errs.CliError`(嵌入 `Problem`),位于 `@renxqoo/agent-cli-sdk/errs`。
+所有错误类型都继承自 `errs.CliError`(嵌入 `Problem`),位于 `@myriosx/cli-kit/errs`。
 
 ### 通用 Problem 结构
 
@@ -55,7 +55,7 @@ interface Problem {
 ### 各构造器用法
 
 ```ts
-import { errs } from "@renxqoo/agent-cli-sdk";
+import { errs } from "@myriosx/cli-kit";
 
 // ① 参数错误(用户输入不对)
 throw new errs.ValidationError({
@@ -187,7 +187,7 @@ throw new errs.ValidationError({
 | internal       | `decode_failure`, `unknown`, `contract_violation`                         |
 | confirmation   | `high_risk_write`                                                         |
 
-业务包可定义自己的 subtype,但必须在业务包的 subtype 声明文件里登记(后续 agent-cli-sdk 提供 lint 校验)。
+业务包可定义自己的 subtype,但必须在业务包的 subtype 声明文件里登记(后续 cli-kit 提供 lint 校验)。
 
 ---
 
@@ -220,7 +220,7 @@ throw new errs.ValidationError({
 
 业务命令 `run` 里调 `ctx.get`/`ctx.post` 等(返回 `TransportResponse`,含 `status`)。两种处理模式:
 
-> **关于 401 自动续期**:业务包通常不处理 401——agent-cli-sdk 请求层内部检测到 401 会自动触发 token refresh(singleflight 复用),refresh 的执行能力由 auth 插件提供(见 `05-credentials.md`)。两者协作:请求层管"检测 + 单次复用",auth 插件管"怎么换 token"。业务包无感,只管 `ctx.get`。下面两种模式针对的是**非鉴权类**的业务 status(404/403/5xx 等)。
+> **关于 401 自动续期**:业务包通常不处理 401——cli-kit 请求层内部检测到 401 会自动触发 token refresh(singleflight 复用),refresh 的执行能力由 auth 插件提供(见 `05-credentials.md`)。两者协作:请求层管"检测 + 单次复用",auth 插件管"怎么换 token"。业务包无感,只管 `ctx.get`。下面两种模式针对的是**非鉴权类**的业务 status(404/403/5xx 等)。
 
 ### 模式 A:命令自己判断 status,throw 类型化错误
 
@@ -252,7 +252,7 @@ export default defineCli({
 });
 ```
 
-`errorOnStatus` 的**值是 subtype 字符串**(不是构造器名)。**subtype 隐含 category**(见上面的"常用 subtype 参考"表,每个 subtype 归属固定 category),agent-cli-sdk 据此自动选对应的类型化构造器 + exit code,业务包不用手写 if。上面示例对应的内置映射:
+`errorOnStatus` 的**值是 subtype 字符串**(不是构造器名)。**subtype 隐含 category**(见上面的"常用 subtype 参考"表,每个 subtype 归属固定 category),cli-kit 据此自动选对应的类型化构造器 + exit code,业务包不用手写 if。上面示例对应的内置映射:
 
 | status | subtype        | → category    | → 构造器                           | → exit |
 | ------ | -------------- | ------------- | ---------------------------------- | :----: |
@@ -260,9 +260,9 @@ export default defineCli({
 | `403`  | `forbidden`    | authorization | `PermissionError`                  |   3    |
 | `5xx`  | `server_error` | api           | `APIError`                         |   1    |
 
-> 若配置了一个未在 subtype 注册表登记的 subtype,agent-cli-sdk 在启动时校验失败(CI 里也会 fail,避免拼写错误悄悄上线)。
+> 若配置了一个未在 subtype 注册表登记的 subtype,cli-kit 在启动时校验失败(CI 里也会 fail,避免拼写错误悄悄上线)。
 
-2.0 默认将 HTTP 4xx/5xx 转为类型化错误，`errorOnStatus` 用来覆盖默认分类。单次 `allowHttpErrors: true` 可显式检查响应，但最终 401 仍为认证错误。默认映射、超时和取消见[生产契约](09-production-contracts.md)。
+0.0.1 默认将 HTTP 4xx/5xx 转为类型化错误，`errorOnStatus` 用来覆盖默认分类。单次 `allowHttpErrors: true` 可显式检查响应，但最终 401 仍为认证错误。默认映射、超时和取消见[生产契约](09-production-contracts.md)。
 
 ---
 
@@ -361,13 +361,13 @@ if (!loggedIn) throw new errs.BareError(3); // exit 3,stderr 不渲染错误输�
 
 - **只设 exit code,不渲染 stderr 错误输出**——因为 stdout 已经携带了答案
 - 是错误侧输出契约的**唯一**例外(成功侧例外是 `skills read`,见 `03-envelopes.md`)
-- **普通业务命令禁用**:正常失败必须 throw 9 类类型化错误,让 agent-cli-sdk 渲染统一输出
+- **普通业务命令禁用**:正常失败必须 throw 9 类类型化错误,让 cli-kit 渲染统一输出
 
 ---
 
 ## exit code 映射表
 
-agent-cli-sdk 根据 Category 自动设 exit code,业务包不用管:
+cli-kit 根据 Category 自动设 exit code,业务包不用管:
 
 | Category                                      | Exit Code |
 | --------------------------------------------- | :-------: |

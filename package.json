@@ -55,9 +55,12 @@
       "import": "./dist/advanced.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
-    "prepack": "pnpm run build",
+    "prepack": "bun run build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.type-tests.json",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",

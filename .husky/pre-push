@@ -1,3 +1,3 @@
 # Full verification before pushing (same checks CI runs)
-pnpm typecheck
-pnpm test
+bun run typecheck
+bun run test

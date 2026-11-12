@@ -8,6 +8,8 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D26-brightgreen)](https://nodejs.org/)
 [![CI](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/renxqoo/agent-cli-sdk/actions/workflows/ci.yml)
 
+**2.0 migration:** HTTP errors throw by default and requests have a 30-second default timeout. Runtime composition APIs use `/advanced`; Skill utilities use `/skills`. See [production contracts and migration](docs/09-production-contracts.en.md).
+
 ---
 
 ## What it is
@@ -153,7 +155,8 @@ defineCli({
   plugins: [authPlugin],           // optional: plugins (auth/logging/audit…)
   commands: { list, get },         // required: top-level commands → orders list
   namespaces: { orders: {...} },   // optional: sub-namespaces → orders orders list
-  baseUrl: 'https://api.x.com',    // optional: backend address for ctx.get/post/…
+  baseUrl: 'https://api.x.com',
+  requestTimeoutMs: 30_000,    // optional: backend address for ctx.get/post/…
   errorOnStatus: { 404: 'not_found', '5xx': 'server_error' },  // optional
   defaultFormat: 'auto',           // optional: 'auto' (default) | 'json' | 'human'
   skillsDir: './skills',           // optional: enable the built-in skills commands
@@ -307,7 +310,7 @@ pnpm test         # vitest
 pnpm test:package # npm tarball smoke test
 ```
 
-See the [contribution guide](CONTRIBUTING.md), [security policy](SECURITY.md), and [support policy](SUPPORT.md) before opening a pull request or report.
+See the [contribution guide](CONTRIBUTING.md) before opening a pull request or report.
 
 ## License
 

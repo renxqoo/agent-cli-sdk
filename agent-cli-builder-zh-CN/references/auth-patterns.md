@@ -1,6 +1,6 @@
 # 鉴权：`defineAuth` 工厂（中文）
 
-标准 OAuth、Bearer、API key 和 Basic 优先使用 `defineAuth`。HMAC、mTLS 和复合鉴权读取 `custom-auth-plugin.md`。
+标准 OAuth 和 Bearer token 使用 `defineAuth`。服务要求 X-API-Key、Basic、HMAC、mTLS 或复合鉴权时，读取 `custom-auth-plugin.md`；provider 中的凭证类型不会自动改变工厂的 Bearer 注入方式。
 
 ## 导航
 
@@ -223,10 +223,10 @@ const app = await defineCliApp({
 | 场景                                          | 用什么                                                          |
 | --------------------------------------------- | --------------------------------------------------------------- |
 | 标准 OAuth 2.1(device / authorization_code+PKCE / client_credentials) | `defineAuth` 工厂(本文档)                  |
-| 单 Bearer 凭证(非 OAuth)                      | 手写 Plugin + `injectAuthHeader(req, token, "bearer")`          |
+| 单 Bearer 凭证(非 OAuth)                      | `defineAuth({ ..., bearerToken })`          |
 | API key / Basic 凭证                          | 手写 Plugin + `injectAuthHeader`(`x-api-key` / `basic`)         |
 | HMAC 签名(非 header 注入,要算签名)            | 手写 auth Plugin,见 `references/custom-auth-plugin.md`          |
-| mTLS(客户端证书)                              | 手写 auth Plugin + `beforeRequest` 注入证书,见同文件            |
+| mTLS(客户端证书)                              | 手写 auth Plugin + 支持证书配置的自定义 transport,见同文件            |
 | 复合鉴权(签名 + header)                       | 手写 auth Plugin + 签名 Plugin(`enforce:'post'`),见同文件       |
 
 后三类读 `references/custom-auth-plugin.md`(手写 Plugin 骨架、provider chain、HMAC 例子、provider 接口)。

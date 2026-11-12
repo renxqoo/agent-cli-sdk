@@ -106,9 +106,9 @@ export MY_CLI_API_KEY="<从安全凭证系统读取>"
 Agent 或脚本调用时显式加 `--json`。成功结果写 stdout，错误和日志写 stderr。
 ```
 
-不要写“列表自动生成分页”。只有命令返回 `meta.pagination` 时才说明 `complete` 和 `nextToken`。
+不要写“列表自动生成分页”。只有命令返回 `meta.pagination` 时才说明分页：代码中的游标是 `nextToken`，JSON wire 字段是 `next_token`。
 
-常用命令来自 `--help`，每条示例都必须能运行。不要虚构 `--dryRun`；结构化写操作只有在 `operation` 声明后才会出现短横线形式的 `--dry-run` 和 `--yes`。
+常用命令来自 `--help`，每条示例都必须能运行。不要虚构 `--dryRun`；结构化写操作只有在 `policy` 声明后才会出现短横线形式的 `--dry-run` 和 `--yes`。
 
 JSON 参数命令示例优先展示安全的文件或原生 stdin 调用及 schema 发现，不要在 README 塞长内联载荷：
 
@@ -138,3 +138,5 @@ pnpm --filter {{package-name}} test
 - [ ] JSON、错误、分页和退出码说明与真实运行一致。
 - [ ] Skill 安装步骤和 README 面向人的步骤语义一致。
 - [ ] pack dry-run 包含 README、dist 和全部 Skill 文件。
+
+基于 2.x 的 README 应说明 HTTP 错误默认失败、默认 30 秒时限、实际使用的 `requestTimeoutMs`，以及取消不等同后端写入回滚。若存在手动状态恢复，核对 `allowHttpErrors` 和其余错误处理。升级说明列出根入口到 `/advanced`、`/skills` 的导入迁移；不要声称尚未发布的版本已经可从 npm 安装。

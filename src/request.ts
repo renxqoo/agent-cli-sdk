@@ -24,6 +24,11 @@ import {
   categoryOfSubtype,
   type Category,
 } from "./errs/index.js";
+import {
+  cancellationError,
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  validateRequestTimeout,
+} from "./request-controls.js";
 
 export interface CreateFetchAdapterOptions {
   baseUrl?: string;
@@ -35,6 +40,8 @@ export interface CreateFetchAdapterOptions {
 /** 创建只发送一次请求的 Fetch adapter。 */
 export function createFetchAdapter(options: CreateFetchAdapterOptions = {}): HttpAdapter {
   const fetchImpl = options.fetch ?? globalThis.fetch;
+  const defaultTimeout = options.timeout ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  validateRequestTimeout(defaultTimeout);
 
   return {
     async send<T>(request: Readonly<RequestOptions>): Promise<AttemptOutcome<T>> {
@@ -55,7 +62,20 @@ export function createFetchAdapter(options: CreateFetchAdapterOptions = {}): Htt
 
       const base = /^https?:\/\//i.test(request.path) ? "" : (options.baseUrl ?? "");
       const url = appendQuery(base + request.path, request.query);
-      const timeout = request.timeout ?? options.timeout;
+      const timeout = request.timeout ?? defaultTimeout;
+      validateRequestTimeout(timeout);
+      if (request.signal?.aborted) {
+        return { kind: "network-error", error: cancellationError(request.signal) };
+      }
+      const deadline = AbortSignal.timeout(timeout);
+      const signal = request.signal ? AbortSignal.any([request.signal, deadline]) : deadline;
+      const networkFailure = (cause: unknown): AttemptOutcome<T> => ({
+        kind: "network-error",
+        error:
+          request.signal?.aborted && signal.reason === request.signal.reason
+            ? cancellationError(request.signal)
+            : toNetworkError(cause, timeout, deadline.aborted),
+      });
 
       let response: Response;
       try {
@@ -63,17 +83,17 @@ export function createFetchAdapter(options: CreateFetchAdapterOptions = {}): Htt
           method: request.method,
           headers,
           body,
-          ...(timeout === undefined ? {} : { signal: AbortSignal.timeout(timeout) }),
+          signal,
         });
       } catch (cause) {
-        return { kind: "network-error", error: toNetworkError(cause, timeout) };
+        return networkFailure(cause);
       }
 
       let text: string;
       try {
         text = await response.text();
       } catch (cause) {
-        return { kind: "network-error", error: toNetworkError(cause, timeout) };
+        return networkFailure(cause);
       }
 
       let data: unknown;
@@ -101,7 +121,9 @@ export function createFetchAdapter(options: CreateFetchAdapterOptions = {}): Htt
 export function throwForResponse(response: TransportResponse, errorOnStatus?: ErrorOnStatus): void {
   if (response.status === 401) {
     const configured = matchErrorOnStatus(401, errorOnStatus);
-    if (configured) throwBySubtype(configured, response);
+    if (configured && categoryOfSubtype(configured) === "authentication") {
+      throwBySubtype(configured, response);
+    }
     throw new AuthenticationError({
       subtype: "no_token",
       code: 401,
@@ -111,9 +133,22 @@ export function throwForResponse(response: TransportResponse, errorOnStatus?: Er
   }
 
   if (response.status < 400) return;
-  const subtype = matchErrorOnStatus(response.status, errorOnStatus);
-  if (subtype) throwBySubtype(subtype, response);
+  const subtype =
+    matchErrorOnStatus(response.status, errorOnStatus) ??
+    matchErrorOnStatus(response.status, DEFAULT_ERROR_ON_STATUS) ??
+    "http_error";
+  throwBySubtype(subtype, response);
 }
+
+const DEFAULT_ERROR_ON_STATUS: ErrorOnStatus = {
+  400: "invalid_argument",
+  403: "forbidden",
+  404: "not_found",
+  409: "conflict",
+  422: "invalid_argument",
+  429: "rate_limited",
+  "5xx": "server_error",
+};
 
 function matchErrorOnStatus(status: number, mapping?: ErrorOnStatus): string | undefined {
   if (!mapping) return undefined;
@@ -148,13 +183,11 @@ const CATEGORY_CONSTRUCTORS: Record<Category, typeof APIError> = {
   confirmation: ConfirmationRequiredError,
 };
 
-function toNetworkError(cause: unknown, timeout?: number): NetworkError {
-  const timedOut =
-    cause instanceof Error && (cause.name === "TimeoutError" || cause.name === "AbortError");
+function toNetworkError(cause: unknown, timeout: number, timedOut: boolean): NetworkError {
   return new NetworkError({
     subtype: timedOut ? "timeout" : "connection_refused",
     message: timedOut
-      ? `Request timed out (${timeout ?? "unknown"}ms)`
+      ? `Request timed out (${timeout}ms)`
       : `Network error: ${cause instanceof Error ? cause.message : String(cause)}`,
     retryable: true,
     cause,

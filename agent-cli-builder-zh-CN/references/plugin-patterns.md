@@ -39,11 +39,11 @@ post 插件(注册序)   ← 最终包装(HMAC 签名、收尾)
 (真正执行:发请求 / 序列化输出)
 ```
 
-`enforce` 支持 `"pre"`、`"normal"`、`"post"`。省略时等价于 `"normal"`；通常省略即可。
+`enforce` 控制命令级钩子的 `"pre"`、`"normal"`、`"post"` 顺序。省略时等价于 `"normal"`；同档保留注册顺序。应用级 `onAppRun/afterAppRun` 按注册顺序执行。
 
 `observeInput` 只收到命令路由、输入元数据和克隆后的 `redactedArgs`，拿不到原始 JSON。通过 Zod 根 schema metadata 的 `sensitive` JSON Pointer 配置脱敏字段；observer 只做 telemetry，失败只记 warning，不改变命令结果。
 
-app 级钩子(`onAppRun` / `afterAppRun`)每次进程运行恰一次，覆盖 help、--version、未知命令与错误路径；异常会被静默吞掉，避免改变退出码或在机器可读结果之后追加含糊 warning。它只适合可丢失的运维感知；审计事件或任何要求可靠送达的副作用不得放在这里。每次运行一次的通知(如版本感知)应放 `afterAppRun`,不要借用每条命令的观察钩子。`setup` 不属于钩子:`defineCliApp` 在路由编译前按注册序执行每个插件的 setup,任一失败 = 启动失败。
+app 级钩子(`onAppRun` / `afterAppRun`)每次 app.run 调用恰一次，覆盖 help、--version、未知命令与错误路径；异常会被静默吞掉，避免改变退出码或在机器可读结果之后追加含糊 warning。它只适合可丢失的运维感知；审计事件或任何要求可靠送达的副作用不得放在这里。每次运行一次的通知(如版本感知)应放 `afterAppRun`,不要借用每条命令的观察钩子。`setup` 不属于钩子:`defineCliApp` 在路由编译前按注册序执行每个插件的 setup,任一失败 = 启动失败。
 
 > ```ts
 > {
@@ -83,6 +83,9 @@ defineCli({
 ```
 
 ---
+
+
+2.x 正常路径会等待 `observeRequest`；调用方取消可结束等待，但已启动的审计继续完成，不能当成取消或回滚保证。请求插件应以 `{ ...request }` 保留 `timeout/signal/allowHttpErrors`；调用方 signal 和单次 timeout 由执行器保留。默认 30 秒只覆盖实际 HTTP 及 body，钩子自身的外部 I/O 也应有界。显式组合运行时时从 `/advanced` 导入调度器，不从根入口导入；普通插件只需实现 `Plugin`/`PluginFactory`。
 
 ## 3. 4 个常见自定义插件
 

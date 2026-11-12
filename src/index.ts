@@ -129,76 +129,20 @@ export {
 // --no-json 模式通用文本渲染(命令 humanFormat 兜底用;也可供业务自定义渲染复用)
 export { prettyPrint, prettyError, printTable, type TableColumn } from "./pretty.js";
 
-// 请求层(供自定义 transport 用)
-export { createFetchAdapter, throwForResponse, type CreateFetchAdapterOptions } from "./request.js";
-
-// 插件
-export {
-  sortPlugins,
-  setupPlugins,
-  runOnAppRun,
-  runAfterAppRun,
-  runBeforeCommand,
-  observeInput,
-  beforeRequest,
-  observeRequest,
-  handleUnauthorized,
-  transformOutput,
-  observeError,
-  handleError,
-} from "./plugin.js";
+// Low-level runtime composition is exported from ./advanced.
 
 // Best-effort update awareness (cached, stderr-only, and opt-in)
 export { createUpdateNotifier, type UpdateNotifierOptions } from "./update-notifier.js";
 
 export { rawText } from "./output.js";
 
-// 上下文工厂
-export { createContext, createStderrLog } from "./context.js";
-
-// 管道
-export { createPipeReader, emptyPipe } from "./pipe.js";
-
-// skill 系统(reader + sync + targets + gen)
+// Skill implementation utilities are exported from ./skills.
 export {
-  listSkills,
-  listPath,
-  readSkill,
-  readReference,
-  splitArg,
-  cleanSubPath,
-  parseFrontmatter,
-  parseFrontmatterText,
-  syncSkills,
-  DEFAULT_SKILL_TARGETS,
-  resolveSkillTargets,
-  resolveActiveTargets,
-  isTargetInstalled,
-  detectInstalledTargets,
-  expandTargetDir,
-  flattenCommands,
-  signatureLine,
-  argsTable,
-  generateAutogenBlock,
-  refreshAutogen,
-  generateSkillSkeleton,
-  AUTOGEN_START,
-  AUTOGEN_END,
-  type SkillInfo,
-  type DirEntry,
-  type ParsedFrontmatter,
-  type SkillTarget,
-  type SyncResult,
-  type SyncSkillsOptions,
-  type SyncTargetResult,
-  type GenLang,
   SkillRepository,
   type SkillRepositoryOptions,
   type GenerateSkillOptions,
+  type SkillTarget,
 } from "./skills/index.js";
-
-// 执行器
-export { runCommand, type RunCommandOptions } from "./pipeline.js";
 
 // install 向导(内部插件:提供顶层 install 命令,业务入口无需拦截)
 export { defineInstaller, type DefineInstallerOptions } from "./installer.js";
@@ -249,6 +193,7 @@ export type {
   HttpAdapter,
   RequestAttemptEvent,
   RequestOptions,
+  RequestControls,
   TransportResponse,
 } from "./request-contracts.js";
 export type { CommandContext, CredentialsApi, LogApi, PipeApi } from "./runtime-contracts.js";

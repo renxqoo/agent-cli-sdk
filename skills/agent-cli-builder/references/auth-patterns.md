@@ -1,6 +1,6 @@
 # Authentication with `defineAuth`
 
-Prefer `defineAuth` for standard OAuth, Bearer, API key, and Basic authentication. Read `custom-auth-plugin.md` only for HMAC, mTLS, composite auth, or a provider the factory cannot express.
+Use `defineAuth` for OAuth and Bearer tokens. Read `custom-auth-plugin.md` for X-API-Key, Basic, HMAC, mTLS or composite auth; credential provider types do not change the factory's Bearer header injection.
 
 ## Contents
 
@@ -17,7 +17,7 @@ Prefer `defineAuth` for standard OAuth, Bearer, API key, and Basic authenticatio
 - `auth login`, `status`, `logout`, and `register` commands.
 - Device, authorization-code with PKCE, and client-credentials flows.
 - Credential-provider resolution in `beforeCommand`.
-- Bearer, X-API-Key, or Basic header injection in `beforeRequest`.
+- Bearer header injection in `beforeRequest`.
 - One singleflight refresh and retry after a 401.
 - Route-specific exemption so auth commands do not require an existing login.
 
@@ -172,13 +172,13 @@ Use `createMemoryLocalState` with `defineCliApp({ localState })` in tests to avo
 
 ## 5. When to use a custom plugin
 
-| Requirement                                                           | Choice                                                      |
-| --------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Standard OAuth device, authorization-code, or client-credentials flow | `defineAuth`                                                |
-| Single Bearer credential (non-OAuth)                                  | Custom plugin with `injectAuthHeader(req, token, "bearer")` |
-| API key or Basic credential                                           | Custom plugin with `injectAuthHeader` (x-api-key / basic)   |
-| HMAC signing                                                          | Custom auth/provider plus post-signing plugin               |
-| mTLS                                                                  | Custom plugin and transport-specific certificate handling   |
-| Multiple signatures or composite headers                              | Custom plugins with explicit hook ordering                  |
+| Requirement                                                           | Choice                                                    |
+| --------------------------------------------------------------------- | --------------------------------------------------------- |
+| Standard OAuth device, authorization-code, or client-credentials flow | `defineAuth`                                              |
+| Single Bearer credential (non-OAuth)                                  | `defineAuth({ ..., bearerToken })`                        |
+| API key or Basic credential                                           | Custom plugin with `injectAuthHeader` (x-api-key / basic) |
+| HMAC signing                                                          | Custom auth/provider plus post-signing plugin             |
+| mTLS                                                                  | Custom plugin and transport-specific certificate handling |
+| Multiple signatures or composite headers                              | Custom plugins with explicit hook ordering                |
 
 For the last three cases, read `custom-auth-plugin.md` and pin the framework version used by the implementation.

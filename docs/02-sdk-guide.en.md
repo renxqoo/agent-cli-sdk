@@ -1,5 +1,8 @@
 # 02 · SDK Development Guide
 
+> 2.0 HTTP defaults, API entry points and migration: [production contracts](09-production-contracts.en.md).
+
+
 > For **business-package developers**. Explains how to use `@renxqoo/agent-cli-sdk` to write a business package: directory structure, ctx, commands, plugins, auth, pagination, testing. This is the document developers reach for most often.
 
 ---
@@ -260,11 +263,11 @@ Componentized command groups use `defineCommands<State>({...})` to obtain the co
 interface CommandContext<State = {}> {
   // —— request methods (hang directly on ctx, no client layer) ——
   // T is the response body type, optional (without it, data is unknown)
-  get<T = unknown>(path: string, query?: Record<string, unknown>): Promise<TransportResponse<T>>;
-  post<T = unknown>(path: string, body?: unknown): Promise<TransportResponse<T>>;
-  put<T = unknown>(path: string, body?: unknown): Promise<TransportResponse<T>>;
-  patch<T = unknown>(path: string, body?: unknown): Promise<TransportResponse<T>>;
-  delete<T = unknown>(path: string): Promise<TransportResponse<T>>;
+  get<T = unknown>(path: string, query?: Record<string, unknown>, controls?: RequestControls): Promise<TransportResponse<T>>;
+  post<T = unknown>(path: string, body?: unknown, controls?: RequestControls): Promise<TransportResponse<T>>;
+  put<T = unknown>(path: string, body?: unknown, controls?: RequestControls): Promise<TransportResponse<T>>;
+  patch<T = unknown>(path: string, body?: unknown, controls?: RequestControls): Promise<TransportResponse<T>>;
+  delete<T = unknown>(path: string, controls?: RequestControls): Promise<TransportResponse<T>>;
   request<T = unknown>(opts: RequestOptions): Promise<TransportResponse<T>>; // low-level fallback
 
   // —— state: data shared between plugins, strongly typed (declared in defineCli<State>) ——
@@ -283,17 +286,20 @@ interface CommandContext<State = {}> {
     clear(namespace: string): Promise<void>;
   };
 
-  // —— auth state ——
-  auth: { status(): AuthStatus; requireScope(scope: string): void };
 }
 
-interface RequestOptions {
+interface RequestControls {
+  timeout?: number;
+  signal?: AbortSignal;
+  allowHttpErrors?: boolean;
+}
+
+interface RequestOptions extends RequestControls {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
   query?: Record<string, unknown>;
   body?: unknown;
   headers?: Record<string, string>;
-  timeout?: number;
 }
 
 interface TransportResponse<T> {
@@ -411,8 +417,9 @@ export const getOrder = defineCommand({
     pos: ["id"],
   },
   async run(ctx, { id }) {
-    const res = await ctx.get<Order>(`/orders/${id}`);
+    const res = await ctx.get<Order>(`/orders/${id}`, undefined, { allowHttpErrors: true });
     if (res.status === 404) throw new errs.NotFoundError(`order ${id} not found`);
+    if (res.status >= 400) throw new errs.APIError({ subtype: "http_error", code: res.status, message: `HTTP ${res.status}` });
     return { data: res.data };
   },
 });
@@ -465,8 +472,9 @@ export const ordersCommands = defineCommands({
     description: "Get order details",
     args: { schema: z.object({ id: z.string() }), pos: ["id"] },
     async run(ctx, { id }) {
-      const res = await ctx.get<Order>(`/orders/${id}`);
+      const res = await ctx.get<Order>(`/orders/${id}`, undefined, { allowHttpErrors: true });
       if (res.status === 404) throw new errs.NotFoundError(`order ${id} not found`);
+      if (res.status >= 400) throw new errs.APIError({ subtype: "http_error", code: res.status, message: `HTTP ${res.status}` });
       return { data: res.data };
     },
   }),
@@ -909,6 +917,7 @@ defineCli<State>({
   commands: { ... },               // required: top-level command group (key = command name) → rxcli-<name> <cmd>
   namespaces?: { ... },            // optional: sub-namespace groups (key = sub-namespace) → rxcli-<name> <ns> <cmd>; not filled in for a single business domain
   skillsDir?: './skills',          // optional: skill directory (default ./skills)
+  requestTimeoutMs?: number, // default: 30_000
   errorOnStatus?: Record<number | `${number}xx`, string>,  // optional: status→error auto-throw
   messages?: { ... },              // optional: onboarding copy i18n
 })
@@ -1047,8 +1056,9 @@ export const ordersCommands = defineCommands({
     name: 'get', description: 'Get order details',
     args: { schema: z.object({ id: z.string() }), pos: ['id'] },
     async run(ctx, { id }) {
-      const res = await ctx.get<Order>(`/orders/${id}`)
+      const res = await ctx.get<Order>(`/orders/${id}`, undefined, { allowHttpErrors: true })
       if (res.status === 404) throw new errs.NotFoundError(`order ${id} not found`)
+      if (res.status >= 400) throw new errs.APIError({ subtype: "http_error", code: res.status, message: `HTTP ${res.status}` });
       return { data: res.data }
     },
   }),

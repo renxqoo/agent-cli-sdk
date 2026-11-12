@@ -1,5 +1,8 @@
 # 00 · Architecture overview
 
+> Current 2.0 public behavior and API boundaries: [production contracts](09-production-contracts.en.md).
+
+
 > This document is the design anchor for agent-cli-sdk. Every follow-up document (command usage, SDK guide, unified output format, errors, credentials, skills) defers to the global decisions here; the implementation must not deviate.
 
 ---
@@ -50,7 +53,7 @@ The core tension it resolves is: **backend interfaces differ wildly (REST/GraphQ
 │  — unified output format: the unified success/error contract                   │
 │  — error classification: 9 classes + exit codes + typed ctor      │
 │  — auth: defineAuth standard factory + composable auth blocks     │
-│  — plugin system: vite-style Plugin + 6 hooks + 3 enforce tiers   │
+│  — plugin system: vite-style Plugin + 8 command hooks + 2 app hooks + 3 enforce tiers   │
 │  — pipes: PipeRecord type + stdin/stdout                          │
 │  — skill: list/read/sync + command doc auto-generation            │
 │  — config: ConfigStore (namespace-isolated credentials, per-package baseUrl) │
@@ -118,8 +121,8 @@ This is the decision table finalized after the project discussion. **All subsequ
 | 15  | Skill             | list/read/sync + **auto-generate command docs from defineCommands**                                                                              | `06-skills.md`      |
 | 16  | Tests             | vitest + `createTestCtx`                                                                                                                          | `02-sdk-guide.md`   |
 | 17  | Types             | command three generics `<Args, Result, State>` + `defineCommands<State>`; strongly-typed `ctx.state`; optional request generic `ctx.get<T>()`      | `02-sdk-guide.md`   |
-| 18  | Plugin hooks      | 6 of them: beforeCommand/beforeRequest/observeRequest/handleUnauthorized/transformOutput/handleError; **3 enforce tiers** (pre/normal/post); chained observeError/handleError | `02-sdk-guide.md`   |
-| 19  | Not in this ver.  | resource() generator, write confirmation, OpenAPI auto-registration                                                                               | this doc            |
+| 18  | Plugin hooks      | 8 command hooks: beforeCommand/observeInput/beforeRequest/observeRequest/handleUnauthorized/transformOutput/observeError/handleError; 2 app hooks: onAppRun/afterAppRun; **3 enforce tiers** (pre/normal/post); chained observeError/handleError | `02-sdk-guide.md`   |
+| 19  | Not in this ver.  | resource() generator, OpenAPI auto-registration; write confirmation is implemented through policy                                                                               | this doc            |
 
 ### The "why" behind a few decisions (short form; see topic docs)
 

@@ -46,7 +46,7 @@ Rules:
 - Treat cursors as opaque strings. Never parse, normalize, or fabricate them.
 - If backend fields are unknown, ask for a response sample. Do not implement `raw.items ?? raw.data ?? raw.records` fallbacks.
 
-The wire contract is camelCase even when the backend uses `has_more` or `next_cursor`.
+Command returns use camelCase `nextToken`; stdout JSON serializes it as `meta.pagination.next_token`. Agents read that wire field and pass the opaque value to the declared continuation argument.
 
 ## 2. Pipe consumers
 

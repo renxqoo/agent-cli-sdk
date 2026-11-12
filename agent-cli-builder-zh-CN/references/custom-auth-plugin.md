@@ -1,8 +1,8 @@
 # 自定义鉴权：手写 auth Plugin、provider chain（中文）
 
-> 标准 OAuth、Bearer、API key 和 Basic 使用 `defineAuth`（见 `auth-patterns.md`）。仅在 `defineAuth` 无法表达时手写 auth Plugin。
+> 标准 OAuth 和 Bearer 使用 `defineAuth`（见 `auth-patterns.md`）。仅在 `defineAuth` 无法表达时手写 auth Plugin。
 >
-> 何时需要:HMAC 签名、mTLS(客户端证书)、复合鉴权(签名 + header)、自定义 provider。
+> 何时需要:X-API-Key、Basic、HMAC 签名、mTLS(客户端证书)、复合鉴权(签名 + header)、自定义 provider。
 
 ## 导航
 
@@ -291,10 +291,12 @@ defineCli({
    - 用 singleflight(同一 refreshToken 复用同一个 refresh Promise,避免并发重复 refresh)
    - 续期成功后**落盘**
 3. 拿到新 token → 重试一次原请求
-4. 重试仍 401 → 抛 `AuthenticationError(token_expired)`,触发用户重新登录
+4. 重试仍 401 → 保持认证类别，默认 `AuthenticationError(no_token)`；刷新被明确拒绝可报告 `token_expired`，临时网络故障仍保留网络分类
 
 **前提**:auth Plugin 必须实现 `handleUnauthorized`。没实现的 auth Plugin 不支持 401 自动续期。token 必须放在 `CommandContext` 绑定的 auth session，禁止用插件闭包保存；同一个插件实例会服务并发的 `App.run()`。
 
 重试会先替换现有认证 header(大小写不敏感),并重新执行全部 `beforeRequest` hook,因此 Bearer / X-Api-Key / Basic 以及 HMAC nonce、时间戳、签名都会按新 token 重算。任何最终 401 都是认证错误,不会因为遗漏 `errorOnStatus` 而被当成成功响应。
 
 `--api-key <key>` 是框架级一次性凭证,只定向提供给 auth provider chain,不会混入业务命令 args 或暴露给其他 telemetry/plugin hook;裸 `--api-key` 会在命令运行前得到 validation 错误。
+
+2.x 最终 401 不受 `allowHttpErrors` 豁免。调用方取消是不可重试的 `network/cancelled`；不要把它替换成过期认证，也不要再发起重试。等待共享刷新时，取消只结束当前等待，共享事务仍可完成。重建请求时保留 `...request`，不要丢失请求控制字段。需要 `createContext`、`createFetchAdapter` 或手动调度时从 `/advanced` 导入。

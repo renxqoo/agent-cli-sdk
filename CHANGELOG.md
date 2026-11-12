@@ -12,6 +12,21 @@ Record public API changes, user-visible behavior, breaking changes, and migratio
 
 ## Unreleased
 
+## [@renxqoo/agent-cli-sdk@2.0.0] - 2026-11-12
+
+### Breaking
+
+- Business HTTP 4xx/5xx now throw typed errors by default. Use per-request `allowHttpErrors: true` for explicit status inspection; final 401 remains an authentication failure.
+- Runtime dispatchers, context/transport factories and pipe readers move from the root to `@renxqoo/agent-cli-sdk/advanced`. Skill utilities move to the existing `/skills` entry point. All documented entry points follow SemVer; unexported files are private.
+- Business HTTP requests have a 30-second default per-attempt deadline, including body consumption. Configure `requestTimeoutMs` on the application or `timeout` on a request.
+- This major release includes the runtime and public API migrations listed below. See [production contracts and migration](docs/09-production-contracts.md).
+
+### Added
+
+- Caller `AbortSignal` and request controls on all context HTTP methods, non-retryable `network/cancelled`, and fallback `api/http_error` classification.
+- Release metadata validation against a Git base in CI, with matching versioned changelog entries and increasing SemVer requirements.
+- Packaged-consumer checks for entry-point boundaries, request failure semantics and advanced composition.
+
 ### Fixed
 
 - Skill sync rejects unavailable or incomplete sources before pruning published content (#3).

@@ -11,17 +11,17 @@ Use this reference for standard error categories, subtypes, exit codes, and `err
 
 ## 1. Categories and subtypes
 
-| Category         | Exit | Standard subtypes                                                                  |
-| ---------------- | ---: | ---------------------------------------------------------------------------------- |
-| `validation`     |    2 | `invalid_argument`, `missing_required`, `out_of_range`                             |
-| `authentication` |    3 | `no_token`, `token_expired`, `token_revoked`, `no_credentials`, `no_refresh_token` |
-| `authorization`  |    3 | `missing_scope`, `app_permission_denied`, `forbidden`                              |
-| `config`         |    3 | `missing_config`, `invalid_config`, `unbound_env`, `skill_sync_failed`             |
-| `network`        |    4 | `timeout`, `connection_refused`, `dns_failure`, `ssl_error`                        |
-| `api`            |    1 | `not_found`, `already_exists`, `conflict`, `rate_limited`, `server_error`          |
-| `policy`         |    6 | `content_blocked`, `challenge_required`, `access_denied`                           |
-| `internal`       |    5 | `decode_failure`, `unknown`, `contract_violation`                                  |
-| `confirmation`   |   10 | `high_risk_write`                                                                  |
+| Category         | Exit | Standard subtypes                                                                       |
+| ---------------- | ---: | --------------------------------------------------------------------------------------- |
+| `validation`     |    2 | `invalid_argument`, `missing_required`, `out_of_range`                                  |
+| `authentication` |    3 | `no_token`, `token_expired`, `token_revoked`, `no_credentials`, `no_refresh_token`      |
+| `authorization`  |    3 | `missing_scope`, `app_permission_denied`, `forbidden`                                   |
+| `config`         |    3 | `missing_config`, `invalid_config`, `unbound_env`, `skill_sync_failed`                  |
+| `network`        |    4 | `timeout`, `cancelled`, `connection_refused`, `dns_failure`, `ssl_error`                |
+| `api`            |    1 | `not_found`, `already_exists`, `conflict`, `rate_limited`, `server_error`, `http_error` |
+| `policy`         |    6 | `content_blocked`, `challenge_required`, `access_denied`                                |
+| `internal`       |    5 | `decode_failure`, `unknown`, `contract_violation`                                       |
+| `confirmation`   |   10 | `high_risk_write`                                                                       |
 
 Use `internal` only for framework or unexpected implementation failures. Business code should not use it as a generic fallback.
 
@@ -49,9 +49,9 @@ defineCli({
 
 Values are subtype strings, not constructors. `defineCli` validates status keys and registered subtypes during assembly.
 
-401 is reserved for authentication handling. The request runtime attempts one auth refresh and retry; a final 401 becomes `AuthenticationError(token_expired)`. Do not depend on an `errorOnStatus` entry for 401.
+401 is reserved for authentication handling. The request runtime attempts one auth refresh and retry; a final 401 remains an authentication error (normally `no_token`; a rejected refresh can report `token_expired`). Non-authentication mappings cannot change that category.
 
-Use global mapping when every command gives the status the same meaning. Handle a status inside `run` when its business meaning or hint differs by command. Never configure and manually inspect the same status: mapped responses throw before `ctx.*` returns.
+HTTP 4xx/5xx throw by default in 2.0. Use global mapping to override shared meanings. To inspect statuses inside `run`, explicitly pass `{ allowHttpErrors: true }` as request controls and handle every remaining failure before returning success. Final 401 still throws. Cancellation is `network/cancelled`, non-retryable; timeout is `network/timeout`.
 
 ## 3. Typed error examples
 
@@ -94,7 +94,7 @@ throw new errs.ConfirmationRequiredError({
 });
 ```
 
-For structured writes, do not throw this manually. Declare `operation.confirmation: "required"`; the runtime validates input, applies dry-run and idempotency policy, then raises the standard confirmation error before business `run`. Manual confirmation errors remain for non-structured commands.
+For structured writes, do not throw this manually. Declare `policy.confirmation: "required"`; the runtime validates input, applies dry-run and idempotency policy, then raises the standard confirmation error before business `run`. Manual confirmation errors remain for non-structured commands.
 
 Prefer standard subtypes. If a genuinely new subtype is required, register it before `defineCli` assembly:
 

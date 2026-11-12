@@ -1,5 +1,7 @@
 # 核心实现契约（中文）
 
+2.0 默认将 HTTP 4xx/5xx 转为类型化错误；`errorOnStatus` 覆盖默认分类。应用通过 `requestTimeoutMs` 设置时限（默认 30,000 ms）。HTTP 快捷方法末尾接受 `RequestControls`，含 `timeout`、`signal`、显式 `allowHttpErrors`；自行检查响应时须处理全部错误状态。运行时调度/上下文工厂使用 `/advanced`，Skill 工具使用 `/skills`。
+
 每次使用 `agent-cli-builder` 实现 CLI 前读取本文件。内容以当前 `@renxqoo/agent-cli-sdk` 源码契约为准。
 
 ## 导航
@@ -113,6 +115,7 @@ const app = await defineCliApp({
   dir: join(homedir(), ".my-cli"),
   baseUrl: process.env.TODOS_API_URL ?? "https://api.example.com",
   commands: todoCommands,
+  createState: () => ({}),
   errorOnStatus: {
     404: "not_found",
     429: "rate_limited",
@@ -147,7 +150,8 @@ export default app;
 | `commands`      | 顶层命令；单业务域使用，必填           |
 | `namespaces`    | 仅用于多个无关业务域，避免命令重名覆盖 |
 | `plugins`       | 必须是 Plugin 对象(`defineAuth` 等是同步工厂),不能传 Promise |
-| `errorOnStatus` | HTTP status 到已登记 subtype 的映射    |
+| `requestTimeoutMs` | 每次物理请求默认时限，单位毫秒；默认 30,000 |
+| `errorOnStatus` | 覆盖默认 HTTP 错误分类，值为已登记 subtype    |
 | `defaultFormat` | `auto`（默认）、`json` 或 `human`      |
 | `skillsDir`     | 设置后注入 `skills` 命令               |
 | `skillsTargets` | 覆盖默认 Skill 同步目标                |
@@ -159,13 +163,29 @@ export default app;
 所有命令都收到 `run(ctx, args)`；argv 和 JSON 模式中的 `args` 都只包含 Zod 校验后的对象，框架策略和输入来源元数据不会混入。命令可使用：
 
 - `ctx.get/post/put/patch/delete`：返回 `{ status, data, headers }`。
-- `ctx.request`：需要自定义 method、query、body、header 或 timeout 时使用。
+- `ctx.request`：需要自定义 method、query、body 或 header 时使用；同样接受请求控制字段。
 - `ctx.state`：插件之间共享的强类型状态。
 - `ctx.log`：写 stderr，不污染结构化 stdout。
 - `ctx.pipe`：读取上游 `PipeRecord`；仅在管道场景使用。
 - `ctx.credentials`：鉴权插件初始化后的凭证 API。
 
 请求类型必须描述真实响应。不要用 `any` 或多字段 fallback 掩盖未知 API 契约。
+
+
+### 2.x 请求控制与入口
+
+GET 的控制参数位于 query 后，POST/PUT/PATCH 位于 body 后，DELETE 位于 path 后：
+
+```ts
+const response = await ctx.get("/orders", { limit: 20 }, {
+  timeout: 5_000,
+  signal: AbortSignal.timeout(10_000),
+});
+```
+
+默认每次物理请求 30 秒，应用通过 `requestTimeoutMs` 配置。时限包含响应体读取，不包含插件和共享 OAuth 刷新；需要覆盖完整请求等待时传 `signal`。取消结束调用方等待，已启动的审计/共享刷新可继续，已完成的后端写入不会回滚。`allowHttpErrors: true` 只适合确需检查错误响应的调用，最终 401 仍抛认证错误。
+
+业务工厂、类型和认证基础块保留根入口；`setupPlugins`、`runCommand`、`createContext`、`createFetchAdapter` 等从 `@renxqoo/agent-cli-sdk/advanced` 导入；`generateAutogenBlock`、`syncSkills` 等从 `/skills` 导入。先核对实际安装版本，本文的 2.x 接口不适用于未迁移的 1.x 项目。
 
 ## 5. 输出、错误与日志
 

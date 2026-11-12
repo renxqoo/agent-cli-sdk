@@ -106,9 +106,9 @@ Match output copy to `defaultFormat`:
 Agents and scripts should pass `--json`. Successful data goes to stdout; errors and logs go to stderr.
 ```
 
-Do not claim pagination is automatic. Mention `complete` and `nextToken` only for commands that return `meta.pagination`.
+Do not claim pagination is automatic. For commands returning `meta.pagination`, distinguish command-side `nextToken` from serialized JSON `next_token`.
 
-Derive command examples from `--help` and execute each one. Never invent `--dryRun`; structured operations expose the kebab-case `--dry-run` and `--yes` flags only when declared by `operation`.
+Derive command examples from `--help` and execute each one. Never invent `--dryRun`; structured operations expose the kebab-case `--dry-run` and `--yes` flags only when declared by `policy`.
 
 For a structured command, show one safe file or stdin invocation plus discovery rather than a long inline payload:
 
@@ -128,6 +128,8 @@ pnpm --filter {{package-name}} test
 ```
 
 Record only maintenance-critical decisions, such as package/bin/namespace mapping, auth strategy, and error mapping.
+
+For 2.x, describe default HTTP failure, the 30-second timeout, any app `requestTimeoutMs` override and the fact that cancellation does not roll back upstream writes. Verify explicit `allowHttpErrors` and remaining-failure handling in recovery examples. Migration notes should cover imports moving to `/advanced` and `/skills`; do not claim an unreleased version is already installable from npm.
 
 ## 5. Release checks
 

@@ -13,6 +13,7 @@ import { readOnlyRequestKey } from "./context.js";
 import { beforeRequest, compilePlugins, handleUnauthorized, observeRequest } from "./plugin.js";
 import { throwForResponse } from "./request.js";
 import { cloneRequest } from "./request-snapshot.js";
+import { throwIfCancelled, withCancellation } from "./request-controls.js";
 
 export interface RequestExecutor<State> {
   execute<T>(
@@ -36,7 +37,20 @@ export function createRequestExecutor<State>(options: {
       const logicalRequest = cloneRequest(request);
 
       for (let attempt = 1; attempt <= 2; attempt++) {
-        const prepared = await beforeRequest(plugins, ctx, logicalRequest);
+        throwIfCancelled(logicalRequest.signal);
+        const prepared = await withCancellation(
+          logicalRequest.signal,
+          beforeRequest(plugins, ctx, logicalRequest),
+        );
+        if (logicalRequest.timeout !== undefined) prepared.timeout = logicalRequest.timeout;
+        // A header/signing plugin may rebuild the request; it cannot remove caller cancellation.
+        if (logicalRequest.signal) {
+          prepared.signal =
+            prepared.signal && prepared.signal !== logicalRequest.signal
+              ? AbortSignal.any([logicalRequest.signal, prepared.signal])
+              : logicalRequest.signal;
+        }
+        throwIfCancelled(prepared.signal);
         if (
           (ctx as CommandContext<State> & { [readOnlyRequestKey]?: boolean })[readOnlyRequestKey] &&
           prepared.method !== "GET"
@@ -54,7 +68,8 @@ export function createRequestExecutor<State>(options: {
           request: cloneRequest(prepared),
           outcome,
         };
-        await observeRequest(plugins, ctx, event);
+        await withCancellation(logicalRequest.signal, observeRequest(plugins, ctx, event));
+        throwIfCancelled(logicalRequest.signal);
 
         if (outcome.kind === "network-error") {
           if (outcome.error instanceof CliError) throw outcome.error;
@@ -70,12 +85,17 @@ export function createRequestExecutor<State>(options: {
 
         const response = outcome.response;
         if (response.status === 401 && attempt === 1) {
-          const decision = await handleUnauthorized(plugins, ctx, event);
+          const decision = await withCancellation(
+            logicalRequest.signal,
+            handleUnauthorized(plugins, ctx, event),
+          );
           if (decision?.action === "retry") continue;
           if (decision?.action === "reject") throw decision.error;
         }
 
-        throwForResponse(response, options.errorOnStatus);
+        if (response.status === 401 || !logicalRequest.allowHttpErrors) {
+          throwForResponse(response, options.errorOnStatus);
+        }
         return response;
       }
 

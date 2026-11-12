@@ -63,6 +63,8 @@ export const list = defineCommand({
 
 ---
 
+命令返回的字段为 `nextToken`；stdout JSON 会序列化为 `meta.pagination.next_token`。Agent 应从 wire 字段读取游标，再传给命令声明的续拉参数。
+
 ## 2. 管道下游(消费上游命令的输出)
 
 下游命令用 `ctx.pipe.isInPipe()` 分流:在管道里就读上游记录,不在就用参数。

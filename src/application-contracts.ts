@@ -15,6 +15,8 @@ export interface DefineCliBaseOptions<State> {
   skillsTargets?: SkillTarget[];
   errorOnStatus?: ErrorOnStatus;
   baseUrl?: string;
+  /** Default timeout for each physical business HTTP request, including reading its body. */
+  requestTimeoutMs?: number;
   defaultFormat?: "json" | "human" | "auto";
   messages?: Record<string, unknown>;
 }

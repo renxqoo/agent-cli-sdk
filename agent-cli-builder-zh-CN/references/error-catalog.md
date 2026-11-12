@@ -46,11 +46,12 @@
 | `unbound_env`       | 环境变量没绑定                  |
 | `skill_sync_failed` | skills 同步失败(权限/磁盘/路径) |
 
-### network (exit 4, 默认 `retryable:true`)
+### network (exit 4；超时/连接故障可重试，取消不可重试)
 
 | subtype              | 用法         |
 | -------------------- | ------------ |
 | `timeout`            | 请求超时     |
+| `cancelled`          | 调用方取消，`retryable:false` |
 | `connection_refused` | 连接拒绝     |
 | `dns_failure`        | DNS 解析失败 |
 | `ssl_error`          | TLS/SSL 错误 |
@@ -64,6 +65,8 @@
 | `conflict`       | 业务冲突(状态机错) | —                                     |
 | `rate_limited`   | 限流(429)          | `retryable:true` + `Retry-After` hint |
 | `server_error`   | 5xx                | `retryable:true`(>=500)               |
+
+`http_error` 是未被更具体默认映射覆盖的 HTTP 错误；分类为 `api`。
 
 ### policy (exit 6)
 
@@ -113,7 +116,7 @@ defineCli({
 
 `errorOnStatus` 的值**只写 subtype 字符串**,不写构造器名。agent-cli-sdk 自动从 subtype 注册表查 Category 选构造器。
 
-401 是请求层保留状态：框架会尝试一次 auth refresh/retry，最终仍为 401 时固定抛 `AuthenticationError(token_expired)`；不需要也不应依赖 `errorOnStatus` 配置 401。
+401 是请求层保留状态：框架会尝试一次 auth refresh/retry，最终仍为 401 时保持认证类别（通常为 `no_token`，刷新被拒时可为 `token_expired`）；非认证映射不能改变其类别。
 
 ---
 
@@ -134,17 +137,18 @@ defineCli({
 // 该 status 需要命令专属语义时，不要把它放进全局 errorOnStatus
 get: defineCommand({
   async run(ctx, { id }) {
-    const res = await ctx.get(`/orders/${id}`)
+    const res = await ctx.get(`/orders/${id}`, undefined, { allowHttpErrors: true })
     // 特殊:404 在这里给业务专属 hint
     if (res.status === 404) {
       throw new errs.NotFoundError(`订单 ${id} 不存在,可能属于其他用户`)
     }
+    if (res.status >= 400) throw new errs.APIError({ subtype: "http_error", code: res.status, message: `HTTP ${res.status}` })
     return { data: res.data }
   },
 }),
 ```
 
-已配置进 `errorOnStatus` 的响应会在 `ctx.get/post/...` 返回前抛出，因此命令内同 status 的 `if` 分支不可达，不能用于覆盖全局映射。
+2.0 默认对全部 HTTP 4xx/5xx 抛错；`errorOnStatus` 覆盖默认分类。上例显式允许检查响应后，还必须处理其他错误状态，才能返回成功。最终 401 始终保留认证失败语义。取消为 `network/cancelled` 且不可重试，超时为 `network/timeout`。
 
 ---
 
@@ -218,7 +222,7 @@ defineCli({
   // → defineCli 立刻 throw:subtype "not_foundd"(配在 status 404)未在 SUBTYPE_REGISTRY 登记
 });
 
-// 结构化写命令不要手工抛此错误；声明 operation.confirmation: "required"
+// 结构化写命令不要手工抛此错误；声明 policy.confirmation: "required"
 ```
 
 写命令由运行时在 Zod 校验、dry-run 和幂等策略之后、进入业务 `run` 之前统一确认。argv 和 JSON 模式使用同一个 `policy`；不要在业务 `run` 中重复确认。

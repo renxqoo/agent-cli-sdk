@@ -49,32 +49,55 @@ export interface DirEntry {
  * stats(不抛 ENOENT),其 isDirectory() 为 false → 跳过。
  */
 export function listSkills(skillsRoot: string): SkillInfo[] {
-  if (!existsSync(skillsRoot)) return [];
+  return discoverSkills(skillsRoot, false);
+}
+
+/** Publication needs a complete source set; skipped entries must never imply deletion. */
+export function listSkillsForPublication(skillsRoot: string): SkillInfo[] {
+  return discoverSkills(skillsRoot, true);
+}
+
+function discoverSkills(skillsRoot: string, strict: boolean): SkillInfo[] {
+  if (!strict && !existsSync(skillsRoot)) return [];
   const entries = readdirSync(skillsRoot);
   const out: SkillInfo[] = [];
   for (const e of entries) {
+    // Reserved metadata and names that cannot identify a skill are never published.
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(e)) continue;
     const full = join(skillsRoot, e);
     let stat;
     try {
       stat = lstatSync(full);
-    } catch {
+    } catch (error) {
+      if (strict) throw error;
       continue; // 不可读条目:跳过,不影响其它 skill 的发现
     }
-    if (!stat.isDirectory()) continue; // 普通文件 / 符号链接(含 broken)跳过
+    if (!stat.isDirectory()) {
+      if (strict)
+        throw new InternalError({
+          subtype: "contract_violation",
+          message: `Skill source "${e}" must be a directory`,
+        });
+      continue; // 普通文件 / 符号链接(含 broken)跳过
+    }
     // L7: a single unreadable/escaping SKILL.md must not abort discovery of every
     // other skill — the BUG-3 resilience contract. Wrap the whole per-entry body.
     try {
       validateSkillName(e);
       assertExistingPathInside(skillsRoot, full, `skill "${e}"`);
       const skillMd = join(full, "SKILL.md");
-      if (!existsSync(skillMd)) continue;
+      if (!existsSync(skillMd)) {
+        if (strict) throw new NotFoundError(`skill "${e}" has no SKILL.md`);
+        continue;
+      }
       assertExistingPathInside(full, skillMd, `SKILL.md in skill "${e}"`);
       const { description, version, metadata } = parseFrontmatter(skillMd);
       const info: SkillInfo = { name: e, description };
       if (version) info.version = version;
       if (metadata && Object.keys(metadata).length > 0) info.metadata = metadata;
       out.push(info);
-    } catch {
+    } catch (error) {
+      if (strict) throw error;
       continue; // 跳过坏条目,不影响其它 skill
     }
   }

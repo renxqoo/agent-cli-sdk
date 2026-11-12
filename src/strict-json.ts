@@ -134,7 +134,7 @@ class StrictJsonParser {
     this.#index += match![0].length;
     const number = Number(match![0]);
     if (!Number.isFinite(number)) this.#limit("JSON number is outside the finite range");
-    if (!match![0].includes(".") && !/[eE]/.test(match![0]) && !Number.isSafeInteger(number)) {
+    if (Number.isInteger(number) && !Number.isSafeInteger(number)) {
       this.#limit("JSON integer exceeds JavaScript safe integer range; encode it as a string");
     }
     return number;

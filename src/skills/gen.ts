@@ -246,7 +246,7 @@ export function refreshAutogen(
       `${escapeRegex(AUTOGEN_START)}[\\s\\S]*?${escapeRegex(AUTOGEN_END)}`,
       "g",
     );
-    const replaced = existing.replace(regex, fullBlock);
+    const replaced = existing.replace(regex, () => fullBlock);
     return replaced.endsWith("\n") ? replaced : `${replaced}\n`;
   }
 

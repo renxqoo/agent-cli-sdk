@@ -2,6 +2,10 @@
 
 > Use `defineAuth` for standard OAuth, Bearer, API key, and Basic authentication. Write a Plugin by hand only for HMAC, mTLS, or composite protocols; a custom implementation must isolate sessions by `CommandContext` and decide retries through an explicit `handleUnauthorized`.
 
+OAuth endpoints share one client identity policy: a nonempty `clientSecret` uses `client_secret_basic`, with the ID and secret individually UTF-8 form-encoded before joining and Base64 encoding. A public client with an empty secret sends no Basic header and includes `client_id` in the form. This applies to code exchange, refresh, device authorization and revocation, following [RFC 6749 §2.3.1](https://www.rfc-editor.org/rfc/rfc6749.html#section-2.3.1) and [RFC 7009 §2.1](https://www.rfc-editor.org/rfc/rfc7009.html#section-2.1).
+
+`auth logout` clears local credentials for the current namespace and attempts to revoke both access and refresh tokens. Local logout still succeeds when the remote service is offline or rejects revocation; `loggedOut: true` confirms local cleanup and does not guarantee remote token revocation.
+
 ---
 
 ## The Two Layers of Authentication

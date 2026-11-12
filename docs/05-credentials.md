@@ -2,6 +2,10 @@
 
 > 标准 OAuth、Bearer、API key 和 Basic 认证优先使用 `defineAuth`。只有 HMAC、mTLS 或复合协议才手写 Plugin；自定义实现必须按 `CommandContext` 隔离 session，并通过显式 `handleUnauthorized` 决策重试。
 
+OAuth 端点统一按客户端类型发送身份：非空 `clientSecret` 使用 `client_secret_basic`，先分别对 ID 与 secret 做 UTF-8 表单编码再连接并 Base64；空 secret 的公开客户端不发送 Basic，在表单中携带 `client_id`。该规则覆盖授权码交换、续期、设备授权与吊销，遵循 [RFC 6749 §2.3.1](https://www.rfc-editor.org/rfc/rfc6749.html#section-2.3.1) 和 [RFC 7009 §2.1](https://www.rfc-editor.org/rfc/rfc7009.html#section-2.1)。
+
+`auth logout` 清除当前 namespace 的本地凭证，并尝试吊销 access/refresh token。远端离线或拒绝吊销时仍可本地退出；`loggedOut: true` 表示本地清理完成，不保证远端令牌已被吊销。
+
 ---
 
 ## 认证的两层分工

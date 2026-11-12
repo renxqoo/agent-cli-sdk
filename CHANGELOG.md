@@ -12,6 +12,14 @@ Record public API changes, user-visible behavior, breaking changes, and migratio
 
 ## Unreleased
 
+### Fixed
+
+- Skill sync rejects unavailable or incomplete sources before pruning published content (#3).
+- OAuth grants, device authorization and revocation share public/confidential client authentication; Basic credentials form-encode each component before Base64 (#4, #5, #6).
+- Repeated Skill generation preserves literal JavaScript replacement tokens in descriptions (#7).
+- Structured input and ConfigStore reject unsafe integers in decimal and exponent notation (#8).
+- Skill publication retains target-local undo data until the ownership manifest commits, and recovers interrupted publications before another source writes (#9).
+
 ### Changed
 
 - Runtime baseline is Node.js 26+ and Bun 1.4+, with minimum-version and stable-release CI lanes.

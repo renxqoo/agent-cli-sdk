@@ -279,6 +279,10 @@ args: {
 
 ## skill 同步机制
 
+发布前必须完整读取源目录与所有有效名称的 skill；源根不可用、skill 目录缺少 `SKILL.md`、读取失败或路径校验失败都会返回失败，保留目标与原清单。`skills list` 仍可跳过坏条目用于展示。要删除已发布 skill，应从可读的源根移除整个 skill 目录；可读空源仍会清理本 source 的旧技能。
+
+每个 target 在本地锁内发布，并在 `.rxcli-sync-manifests/.publication/` 暂存新内容、旧目录和恢复意图。带 publication ID 的 source manifest 是提交点：提交前失败会回滚，提交后只清理备份；若进程中断或恢复失败，下次取得该 target 锁的同步会先完成恢复，不需要原源文件。各 target 独立提交，不提供跨 target 原子性，也不承诺断电持久性。恢复仅处理记录的路径，保留其他 source 和用户目录。
+
 业务包自带的 `skills/` 目录,通过两种方式让 agent 发现:
 
 ### 方式 1:`skills sync`(离线兜底,探测式多 target)

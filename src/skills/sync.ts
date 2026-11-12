@@ -23,12 +23,13 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { listSkills } from "./reader.js";
+import { listSkillsForPublication } from "./reader.js";
 import { readSkillTree, writeSkillTree, type SkillTree } from "./files.js";
 import { assertExistingPathInside, validateSkillName } from "./path-guard.js";
 import { isAbsolute } from "node:path";
 import { ConfigError } from "../errs/index.js";
 import { withFileLockSync } from "../infra/file-lock.js";
+import { writeAtomicFile } from "../infra/atomic-file.js";
 import {
   resolveSkillTargets,
   resolveActiveTargets,
@@ -197,6 +198,7 @@ function syncOneLocked(
   const manifestsDir = join(destDir, ".rxcli-sync-manifests");
   mkdirSync(manifestsDir, { recursive: true });
   assertExistingPathInside(destDir, manifestsDir, "Skill manifests");
+  recoverPublication(destDir, manifestsDir);
   const manifestPath = join(manifestsDir, `${sourceId}.json`);
   recoverFileTransaction(manifestPath);
   const previousManifest = existsSync(manifestPath) ? readManifest(manifestPath) : undefined;
@@ -214,16 +216,15 @@ function syncOneLocked(
     }
   }
 
+  const changes = new Map<string, SkillTree | null>();
   for (const previous of previousNames) {
     if (!sourceNames.has(previous)) {
-      const target = join(destDir, previous);
+      recoverInterruptedSwap(join(destDir, previous), operations);
       const otherSource = otherOwners.get(previous);
       if (otherSource) {
-        // 原子替换:另一 owner 源拷贝失败时,保留 dest 原内容(BUG-1)。
-        replaceDirectoryTransaction(join(otherSource, previous), target, operations);
+        changes.set(previous, readSkillTree(join(otherSource, previous)));
       } else {
-        // 无其它 owner:明确清理 dest(源端已删,该 skill 应被移除)。
-        removeDirectoryTransaction(target, operations);
+        changes.set(previous, null);
       }
     }
   }
@@ -239,20 +240,129 @@ function syncOneLocked(
         unchanged = false;
       }
     }
-    if (!unchanged) replaceDirectoryTransaction(tree, target, operations);
+    if (!unchanged) changes.set(name, tree);
   }
-  writeFileTransaction(
-    manifestPath,
-    JSON.stringify(
-      {
-        source: resolve(skillsRoot),
-        skills: [...sourceNames].toSorted(),
-        digests: Object.fromEntries([...snapshots].map(([name, tree]) => [name, tree.digest])),
-      },
-      null,
-      2,
-    ) + "\n",
-  );
+  publishTransaction(destDir, manifestsDir, manifestPath, changes, {
+    source: resolve(skillsRoot),
+    skills: [...sourceNames].toSorted(),
+    digests: Object.fromEntries([...snapshots].map(([name, tree]) => [name, tree.digest])),
+  });
+}
+
+interface PublicationIntent {
+  id: string;
+  manifest: string;
+  changes: { name: string; hadPrevious: boolean; publish: boolean }[];
+}
+
+/** Keep target-local undo data until content AND ownership have committed. */
+function publishTransaction(
+  destDir: string,
+  manifestsDir: string,
+  manifestPath: string,
+  changes: ReadonlyMap<string, SkillTree | null>,
+  manifest: SyncManifest,
+): void {
+  const directory = join(manifestsDir, ".publication");
+  mkdirSync(join(directory, "staged"), { recursive: true });
+  mkdirSync(join(directory, "previous"));
+  const intent: PublicationIntent = {
+    id: randomUUID(),
+    manifest: basename(manifestPath),
+    changes: [...changes].map(([name, tree]) => ({
+      name,
+      hadPrevious: existsSync(join(destDir, name)),
+      publish: tree !== null,
+    })),
+  };
+  try {
+    for (const [name, tree] of changes) {
+      if (tree) writeSkillTree(tree, join(directory, "staged", name));
+    }
+    // No target mutations are allowed before the complete recovery intent is visible.
+    writeAtomicFile(join(directory, "intent.json"), JSON.stringify(intent));
+    for (const change of intent.changes) {
+      const target = join(destDir, change.name);
+      if (change.hadPrevious) renameSync(target, join(directory, "previous", change.name));
+      if (change.publish) renameSync(join(directory, "staged", change.name), target);
+    }
+    // This identity is the commit point, including when cleanup is interrupted.
+    writeFileTransaction(
+      manifestPath,
+      JSON.stringify({ ...manifest, publicationId: intent.id }, null, 2) + "\n",
+    );
+  } catch (error) {
+    // If rollback itself fails, leave the journal and backups for the next lock holder.
+    recoverPublication(destDir, manifestsDir);
+    throw error;
+  }
+  recoverPublication(destDir, manifestsDir);
+}
+
+/** Called under the target lock before ANY source can publish to this target. */
+function recoverPublication(destDir: string, manifestsDir: string): void {
+  const directory = join(manifestsDir, ".publication");
+  if (!existsSync(directory)) return;
+  assertExistingPathInside(manifestsDir, directory, "Skill publication");
+  const intentPath = join(directory, "intent.json");
+  if (!existsSync(intentPath)) {
+    // Preparation never mutated the target without an intent.
+    rmSync(directory, { recursive: true, force: true });
+    return;
+  }
+  assertExistingPathInside(directory, intentPath, "Skill publication intent");
+  const intent = JSON.parse(readFileSync(intentPath, "utf8")) as PublicationIntent;
+  if (
+    !intent ||
+    typeof intent.id !== "string" ||
+    !/^[a-f0-9]{64}\.json$/.test(intent.manifest) ||
+    !Array.isArray(intent.changes)
+  ) {
+    throw new ConfigError({
+      subtype: "invalid_config",
+      message: "Invalid skill publication intent",
+    });
+  }
+  // Validate the entire intent before performing any recovery mutations.
+  for (const change of intent.changes) {
+    if (
+      !change ||
+      typeof change.name !== "string" ||
+      typeof change.hadPrevious !== "boolean" ||
+      typeof change.publish !== "boolean"
+    ) {
+      throw new ConfigError({
+        subtype: "invalid_config",
+        message: "Invalid skill publication change",
+      });
+    }
+    validateSkillName(change.name);
+  }
+  for (const child of ["staged", "previous"]) {
+    assertExistingPathInside(directory, join(directory, child), "Skill publication data");
+  }
+  const manifestPath = join(manifestsDir, intent.manifest);
+  recoverFileTransaction(manifestPath);
+  const committed =
+    existsSync(manifestPath) && readManifest(manifestPath).publicationId === intent.id;
+  if (!committed) {
+    for (const change of intent.changes) {
+      const target = join(destDir, change.name);
+      const previous = join(directory, "previous", change.name);
+      if (existsSync(previous)) {
+        rmSync(target, { recursive: true, force: true });
+        renameSync(previous, target);
+      } else if (
+        !change.hadPrevious &&
+        change.publish &&
+        !existsSync(join(directory, "staged", change.name))
+      ) {
+        // The staged directory disappeared only when its activation rename succeeded.
+        rmSync(target, { recursive: true, force: true });
+      }
+    }
+  }
+  rmSync(directory, { recursive: true, force: true });
 }
 
 function withSyncLock<T>(destDir: string, operation: () => T): T {
@@ -263,6 +373,7 @@ interface SyncManifest {
   source: string;
   skills: string[];
   digests?: Record<string, string>;
+  publicationId?: string;
 }
 
 function readManifest(path: string): SyncManifest {
@@ -394,11 +505,12 @@ export function syncSkills(skillsRoot: string, options?: SyncSkillsOptions): Syn
     candidates.filter((c) => !activeTargets.some((a) => a.key === c.key)).map((c) => c.key),
   );
 
-  const skills = listSkills(skillsRoot);
-  const count = skills.length;
+  let count = 0;
   const snapshots = new Map<string, SkillTree>();
   let sourceError: unknown;
   try {
+    const skills = listSkillsForPublication(skillsRoot);
+    count = skills.length;
     for (const skill of skills) {
       const source = join(skillsRoot, skill.name);
       assertExistingPathInside(skillsRoot, source, "Skill source");

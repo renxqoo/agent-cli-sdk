@@ -11,6 +11,10 @@ import type {
 
 type OAuthFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
+function encodeClientCredential(value: string): string {
+  return new URLSearchParams({ x: value }).toString().slice(2);
+}
+
 /** Deep OAuth protocol boundary: transport, wire encoding, decoding and error taxonomy. */
 export class OAuthClient {
   constructor(
@@ -21,7 +25,7 @@ export class OAuthClient {
   async authorizeDevice(scope?: string): Promise<DeviceAuthInfo> {
     const form = new URLSearchParams();
     if (scope) form.set("scope", scope);
-    const response = await this.request("/device_authorization", this.formRequest(form, true));
+    const response = await this.request("/device_authorization", this.formRequest(form));
     const body = await decodeJson(response);
     if (!response.ok) throw apiFailure(response, "device_authorization failed", body);
     const value = objectBody(body, "device_authorization");
@@ -44,7 +48,7 @@ export class OAuthClient {
       device_code: deviceCode,
       client_id: this.config.clientId,
     });
-    const response = await this.request("/token", this.formRequest(form, true));
+    const response = await this.request("/token", this.formRequest(form));
     const raw = await decodeJson(response);
     if (response.ok) return { status: "ok", token: tokenInfo(raw, "device token") };
     const body = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -65,7 +69,7 @@ export class OAuthClient {
 
   async refresh(refreshToken: string): Promise<TokenInfo> {
     const form = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken });
-    const response = await this.request("/token", this.formRequest(form, true));
+    const response = await this.request("/token", this.formRequest(form));
     const body = await decodeJson(response);
     if (!response.ok) {
       if (response.status === 429 || response.status >= 500) {
@@ -116,7 +120,7 @@ export class OAuthClient {
     hint: "access_token" | "refresh_token" = "access_token",
   ): Promise<void> {
     const form = new URLSearchParams({ token, token_type_hint: hint });
-    const response = await this.request("/revoke", this.formRequest(form, false));
+    const response = await this.request("/revoke", this.formRequest(form));
     if (!response.ok) throw apiFailure(response, "revoke failed");
   }
 
@@ -154,15 +158,13 @@ export class OAuthClient {
     codeVerifier: string;
     redirectUri: string;
   }): Promise<TokenInfo> {
-    const publicClient = !this.config.clientSecret;
     const form = new URLSearchParams({
       grant_type: "authorization_code",
       code: params.code,
       code_verifier: params.codeVerifier,
       redirect_uri: params.redirectUri,
-      ...(publicClient ? { client_id: this.config.clientId } : {}),
     });
-    const response = await this.request("/token", this.formRequest(form, !publicClient));
+    const response = await this.request("/token", this.formRequest(form));
     const body = await decodeJson(response);
     if (!response.ok) throw apiFailure(response, "authorization_code exchange failed", body);
     return tokenInfo(body, "authorization_code token");
@@ -171,25 +173,29 @@ export class OAuthClient {
   async clientCredentials(scope?: string): Promise<TokenInfo> {
     const form = new URLSearchParams({ grant_type: "client_credentials" });
     if (scope) form.set("scope", scope);
-    const response = await this.request("/token", this.formRequest(form, true));
+    const response = await this.request("/token", this.formRequest(form));
     const body = await decodeJson(response);
     if (!response.ok) throw apiFailure(response, "client_credentials token failed", body);
     return tokenInfo(body, "client_credentials token");
   }
 
-  private formRequest(form: URLSearchParams, authenticate: boolean): RequestInit {
+  private formRequest(form: URLSearchParams): RequestInit {
+    // One client identity policy for grants, device authorization and revocation.
+    const confidential = Boolean(this.config.clientSecret);
+    if (!confidential) form.set("client_id", this.config.clientId);
     return {
       method: "POST",
       headers: {
         "content-type": "application/x-www-form-urlencoded",
-        ...(authenticate ? { authorization: this.basicAuthorization() } : {}),
+        ...(confidential ? { authorization: this.basicAuthorization() } : {}),
       },
       body: form.toString(),
     };
   }
 
   private basicAuthorization(): string {
-    return `Basic ${Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString("base64")}`;
+    // RFC 6749 section 2.3.1: form-encode each component before joining with ':'.
+    return `Basic ${Buffer.from(`${encodeClientCredential(this.config.clientId)}:${encodeClientCredential(this.config.clientSecret)}`).toString("base64")}`;
   }
 
   private async request(path: string, init: RequestInit = {}): Promise<Response> {

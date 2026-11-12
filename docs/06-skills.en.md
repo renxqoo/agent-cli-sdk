@@ -279,6 +279,10 @@ It is recommended to fill in `.describe()` for every business parameter; this is
 
 ## Skill sync mechanism
 
+Publication requires a complete readable source root and every skill with a valid name. An unavailable root, a skill directory missing `SKILL.md`, or a read/path-validation failure returns failure and preserves the target and manifest. `skills list` still skips damaged entries for display. To remove a published skill, remove its entire directory from a readable source root; a readable empty source still prunes that source's previous skills.
+
+Each target publishes under a local lock, staging new contents, previous directories and recovery intent in `.rxcli-sync-manifests/.publication/`. The source manifest's publication ID is the commit point: failures before commit roll back, while committed publications only discard backups. After process interruption or failed recovery, the next sync holding that target's lock recovers first, without needing the original source files. Targets commit independently; this does not provide cross-target atomicity or power-loss durability. Recovery only touches recorded paths, preserving other sources and user directories.
+
 The `skills/` directory bundled with the business package is made discoverable to agents in two ways:
 
 ### Method 1: `skills sync` (offline fallback, detection-based multi-target)
